@@ -1,6 +1,19 @@
+# simulation controls
 nfish <- 500
-nstations_sep <- c(3,3)
+nstations_sep <- c(3,3) #c(3,3)
 nstations <- sum(nstations_sep)
+
+nsim <- 500
+
+
+# JAGS controls
+niter <- 10000
+ncores <- 6
+# ncores <- min(10, parallel::detectCores()-1)
+
+
+
+
 
 
 # define candidate models
@@ -122,7 +135,7 @@ for(i in 1:dim(states)[1]) {
 
 
 
-nsim <- 150
+
 
 # initializing matrices for parameter estimates (medians) & sd's, and correlations
 est_detection_hm <- est_survival_hm <- est_overall_survival_hm <- matrix(nrow=nsim, ncol=nstations)
@@ -192,11 +205,6 @@ for(isim in 1:nsim) {
   
   
   #### running all models
-  
-  # JAGS controls
-  niter <- 4000
-  # ncores <- 3
-  ncores <- min(10, parallel::detectCores()-1)
   
   
   # RUNNING THE HIDDEN MARKOV MODEL
@@ -284,4 +292,122 @@ for(isim in 1:nsim) {
   thecors_hmi[,,isim] <- cor(cbind(kenai_jags_out_hmi$sims.list$psurvival, kenai_jags_out_hmi$sims.list$pdetection))
   thecors_mn[,,isim] <- cor(cbind(kenai_jags_out_mn$sims.list$psurvival, kenai_jags_out_mn$sims.list$pdetection))
   
+  print(isim)
 }
+
+# should look better at convergence between all (last run)
+tracedens_jags(kenai_jags_out_hm, 
+               p=c("pdetection","psurvival","overall_survival"),
+               parmfrow=c(3,2))
+tracedens_jags(kenai_jags_out_hmi, 
+               p=c("pdetection","psurvival","overall_survival"),
+               parmfrow=c(3,2))
+tracedens_jags(kenai_jags_out_hm, 
+               p=c("pdetection","psurvival","overall_survival"),
+               parmfrow=c(3,2))
+
+plotRhats(kenai_jags_out_hm)
+plotRhats(kenai_jags_out_hmi)
+plotRhats(kenai_jags_out_mn)
+
+# is there bias?
+par(mfrow=c(1,3))
+caterpillar(est_detection_hm - pdetections, main="detection bias - hm")
+abline(h=0)
+caterpillar(est_detection_hmi - pdetections, main="detection bias - hmi")
+abline(h=0)
+caterpillar(est_detection_mn - pdetections, main="detection bias - mn")
+abline(h=0)
+
+caterpillar(est_survival_hm - psurvivals, main="survival bias - hm")
+abline(h=0)
+caterpillar(est_survival_hmi - psurvivals, main="survival bias - hmi")
+abline(h=0)
+caterpillar(est_survival_mn - psurvivals, main="survival bias - mn")
+abline(h=0)
+
+caterpillar(est_overall_survival_hm - overall_survivals, main="overall survival bias - hm")
+abline(h=0)
+caterpillar(est_overall_survival_hmi - overall_survivals, main="overall survival bias - hmi")
+abline(h=0)
+caterpillar(est_overall_survival_mn - overall_survivals, main="overall survival bias - mn")
+abline(h=0)
+
+# compare sd
+caterpillar(sd_detection_hm, main="detection sd - hm")
+caterpillar(sd_detection_hmi, main="detection sd - hmi")
+caterpillar(sd_detection_mn, main="detection sd - mn")
+
+caterpillar(sd_survival_hm, main="survival sd - hm")
+caterpillar(sd_survival_hmi, main="survival sd - hmi")
+caterpillar(sd_survival_mn, main="survival sd - mn")
+
+caterpillar(sd_overall_survival_hm, main="survival sd - hm")
+caterpillar(sd_overall_survival_hmi, main="survival sd - hmi")
+caterpillar(sd_overall_survival_mn, main="survival sd - mn")
+
+# can we do something like rmse? I would think so
+# rmse <- function(x,y) sqrt(mean((x-y)^2, na.rm=TRUE))
+rmse_detection_hm <- (est_detection_hm - pdetections)^2 %>% colMeans %>% sqrt 
+rmse_detection_hmi <- (est_detection_hmi - pdetections)^2 %>% colMeans %>% sqrt 
+rmse_detection_mn <- (est_detection_mn - pdetections)^2 %>% colMeans %>% sqrt
+rmse_survival_hm <- (est_survival_hm - psurvivals)^2 %>% colMeans %>% sqrt 
+rmse_survival_hmi <- (est_survival_hmi - psurvivals)^2 %>% colMeans %>% sqrt 
+rmse_survival_mn <- (est_survival_mn - psurvivals)^2 %>% colMeans %>% sqrt 
+rmse_overall_survival_hm <- (est_overall_survival_hm - overall_survivals)^2 %>% colMeans %>% sqrt 
+rmse_overall_survival_hmi <- (est_overall_survival_hmi - overall_survivals)^2 %>% colMeans %>% sqrt 
+rmse_overall_survival_mn <- (est_overall_survival_mn - overall_survivals)^2 %>% colMeans %>% sqrt 
+plotthemboth <- function(x,y,z,...) {
+  plot(x, pch="+", col=2, ylim=range(0,x,y,z), ...=...)
+  points(y, pch="+", col=4)
+  points(z, pch="+", col=3)
+}
+plotthemboth(rmse_detection_hm, rmse_detection_hmi, rmse_detection_mn, 
+             main="rmse detection")
+plotthemboth(rmse_survival_hm, rmse_survival_hmi, rmse_survival_mn,
+             main="rmse survival")
+plotthemboth(rmse_overall_survival_hm, rmse_overall_survival_hmi, rmse_overall_survival_mn,
+             main="rmse overall survival")
+
+
+# compare rp - this will be the kicker
+relative <- FALSE  # FALSE will calculate absolute accuracy
+
+rp_survival_hm <- rp_detection_hm <- rp_overall_survival_hm <- NA*psurvival
+for(j in seq(nstations)) {
+  rp_survival_hm[j] <- dsftools::rp(est_survival_hm[,j], psurvivals[,j], 
+                                    confidence=0.95, relative=relative)
+  rp_overall_survival_hm[j] <- dsftools::rp(est_overall_survival_hm[,j], overall_survivals[,j], 
+                                            confidence=0.95, relative=relative)
+  rp_detection_hm[j] <- dsftools::rp(est_detection_hm[,j], pdetections[,j], 
+                                     confidence=0.95, relative=relative)
+}
+
+rp_survival_hmi <- rp_detection_hmi <- rp_overall_survival_hmi <- NA*psurvival
+for(j in seq(nstations)) {
+  rp_survival_hmi[j] <- dsftools::rp(est_survival_hmi[,j], psurvivals[,j], 
+                                     confidence=0.95, relative=relative)
+  rp_overall_survival_hmi[j] <- dsftools::rp(est_overall_survival_hmi[,j], overall_survivals[,j], 
+                                             confidence=0.95, relative=relative)
+  rp_detection_hmi[j] <- dsftools::rp(est_detection_hmi[,j], pdetections[,j], 
+                                      confidence=0.95, relative=relative)
+}
+
+rp_survival_mn <- rp_detection_mn <- rp_overall_survival_mn <- NA*psurvival
+for(j in seq(nstations)) {
+  rp_survival_mn[j] <- dsftools::rp(est_survival_mn[,j], psurvivals[,j], 
+                                    confidence=0.95, relative=relative)
+  rp_overall_survival_mn[j] <- dsftools::rp(est_overall_survival_mn[,j], overall_survivals[,j], 
+                                            confidence=0.95, relative=relative)
+  rp_detection_mn[j] <- dsftools::rp(est_detection_mn[,j], pdetections[,j], 
+                                     confidence=0.95, relative=relative)
+}
+plotthemboth(rp_detection_hm, rp_detection_hmi, rp_detection_mn, 
+             main="rp detection")
+plotthemboth(rp_survival_hm, rp_survival_hmi, rp_survival_mn,
+             main="rp survival")
+plotthemboth(rp_overall_survival_hm, rp_overall_survival_hmi, rp_overall_survival_mn,
+             main="rp overall survival")
+
+
+# is there something like simulataneous rp??
