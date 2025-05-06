@@ -3,14 +3,64 @@ nfish <- 500
 nstations_sep <- c(3,3) #c(3,3)
 nstations <- sum(nstations_sep)
 
-nsim <- 500
+
+
+pdetection_beta_river <- c(19, 1)
+pdetection_beta_nearshore <- c(7, 3)
+
+psurvival_beta_river <- c(18, 1)
+psurvival_beta_nearshore <- c(15, 2)
+
+
+nsim <- 500   # 50 sim in 1.5 hrs on laptop
+save_results <- TRUE
+
 
 
 # JAGS controls
-niter <- 10000
+niter <- 8000   # make this divisible by 4k
 ncores <- 6
 # ncores <- min(10, parallel::detectCores()-1)
 
+
+
+xmeta <- seq(from=0, to=1, by=0.01)
+ymeta <- data.frame(dbeta(xmeta, 
+                          pdetection_beta_river[1], 
+                          pdetection_beta_river[2]),
+                    dbeta(xmeta, 
+                          pdetection_beta_nearshore[1], 
+                          pdetection_beta_nearshore[2]),
+                    dbeta(xmeta, 
+                          psurvival_beta_river[1], 
+                          psurvival_beta_river[2]),
+                    dbeta(xmeta, 
+                          psurvival_beta_nearshore[1], 
+                          psurvival_beta_nearshore[2]))
+distmns <- sapply(list(pdetection_beta_river,
+                       pdetection_beta_nearshore,
+                       psurvival_beta_river,
+                       psurvival_beta_nearshore),
+                  \(x) x[1]/sum(x))
+# # par(mfrow=c(2,1))
+# plot(NA, xlim=0:1, ylim=range(0,ymeta[,1:2]))
+# for(j in 1:2) lines(xmeta, ymeta[,j], col=c(4,2,4,2)[j], lty=c(2,2,1,1)[j])
+# plot(NA, xlim=0:1, ylim=range(0,ymeta[,3:4]))
+# for(j in 3:4) lines(xmeta, ymeta[,j], col=c(4,2,4,2)[j], lty=c(2,2,1,1)[j])
+
+par(mfrow=c(1,1))
+plot(NA, xlim=0:1, ylim=range(0,ymeta))
+for(j in 1:4) {
+  lines(xmeta, ymeta[,j], col=c(4,2,4,2)[j], lty=c(2,2,1,1)[j], lwd=2)
+  segments(x0=distmns[j],   
+           y0=0,
+           y1=ymeta[,j][which.max(xmeta >= distmns[j])],
+           col=c(4,2,4,2)[j], lty=c(2,2,1,1)[j],
+           lwd=2)
+}
+legend("topleft", 
+       legend=paste(c("river","nearshore"), rep(c("detection","survival"), each=2)),
+       col=c(4,2,4,2), lty=c(2,2,1,1),lwd=2)
 
 
 
@@ -151,16 +201,26 @@ sd_detection_mn <- sd_survival_mn <- sd_overall_survival_mn <- matrix(nrow=nsim,
 # initializing matrices for simulated "true" param values for comparison
 pdetections <- psurvivals <- overall_survivals <- matrix(nrow=nsim, ncol=nstations)
 
+{
+t_overall_start <- Sys.time()
 for(isim in 1:nsim) {
   
   # first, simulating detection & survival probabilities
   # (separately for each simulated replicate)
   
-  pdetection <- c(rbeta(nstations_sep[1], 18, 1), 
-                  rbeta(nstations_sep[2], 7, 3))
+  pdetection <- c(rbeta(nstations_sep[1], 
+                        pdetection_beta_river[1], 
+                        pdetection_beta_river[2]), 
+                  rbeta(nstations_sep[2], 
+                        pdetection_beta_nearshore[1], 
+                        pdetection_beta_nearshore[2]))
   
-  psurvival <- c(rbeta(nstations_sep[1], 18, 1),
-                 rbeta(nstations_sep[2], 15, 2))
+  psurvival <- c(rbeta(nstations_sep[1], 
+                       psurvival_beta_river[1], 
+                       psurvival_beta_river[2]), 
+                 rbeta(nstations_sep[2], 
+                       psurvival_beta_nearshore[1], 
+                       psurvival_beta_nearshore[2]))
   
   overall_survival <- sapply(seq_along(psurvival), \(x) prod(psurvival[1:x]))
   
@@ -263,8 +323,8 @@ for(isim in 1:nsim) {
     kenai_jags_out_mn <- jagsUI::jags(model.file=kenai_jags_mn, data=kenai_data_mn,
                                        parameters.to.save=c("psurvival", "pdetection",
                                                             "overall_survival"),
-                                       n.chains=ncores, parallel=T, n.iter=niter,
-                                       n.burnin=niter/2, n.thin=niter/2000,
+                                       n.chains=ncores, parallel=T, n.iter=niter/2,
+                                       n.burnin=niter/2/2, n.thin=niter/2000/2,
                                        verbose=FALSE)
     if(isim==1) print(Sys.time() - tstart)
   }
@@ -293,6 +353,18 @@ for(isim in 1:nsim) {
   thecors_mn[,,isim] <- cor(cbind(kenai_jags_out_mn$sims.list$psurvival, kenai_jags_out_mn$sims.list$pdetection))
   
   print(isim)
+}
+print(Sys.time() - t_overall_start)
+if(save_results) {
+  save(pdetections, psurvivals, overall_survivals,
+       est_detection_hm, est_detection_hmi, est_detection_mn,
+       est_survival_hm, est_survival_hmi, est_survival_mn,
+       est_overall_survival_hm, est_overall_survival_hmi, est_overall_survival_mn,
+       sd_detection_hm, sd_detection_hmi, sd_detection_mn,
+       sd_survival_hm, sd_survival_hmi, sd_survival_mn,
+       sd_overall_survival_hm, sd_overall_survival_hmi, sd_overall_survival_mn,
+       file="OP_2025/data/Kenai_telem_rp_simresults.Rdata")
+}
 }
 
 # should look better at convergence between all (last run)
