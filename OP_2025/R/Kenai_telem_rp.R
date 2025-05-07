@@ -14,6 +14,7 @@ psurvival_beta_nearshore <- c(15, 2)
 
 nsim <- 500   # 50 sim in 1.5 hrs on laptop
 save_results <- TRUE
+run_model <- FALSE
 
 
 
@@ -23,6 +24,15 @@ ncores <- 6
 # ncores <- min(10, parallel::detectCores()-1)
 
 
+
+
+library(jagsUI)
+library(jagshelper)
+library(magrittr)
+
+
+
+if(run_model) {
 
 xmeta <- seq(from=0, to=1, by=0.01)
 ymeta <- data.frame(dbeta(xmeta, 
@@ -67,9 +77,6 @@ legend("topleft",
 
 
 # define candidate models
-
-library(jagsUI)
-library(jagshelper)
 
 # HIDDEN MARKOV MODEL
 
@@ -363,9 +370,14 @@ if(save_results) {
        sd_detection_hm, sd_detection_hmi, sd_detection_mn,
        sd_survival_hm, sd_survival_hmi, sd_survival_mn,
        sd_overall_survival_hm, sd_overall_survival_hmi, sd_overall_survival_mn,
+       niter, ncores, nsim,
        file="OP_2025/data/Kenai_telem_rp_simresults.Rdata")
 }
 }
+} else {
+  load(file="OP_2025/data/Kenai_telem_rp_simresults.Rdata")
+}
+
 
 # should look better at convergence between all (last run)
 tracedens_jags(kenai_jags_out_hm, 
@@ -414,9 +426,9 @@ caterpillar(sd_survival_hm, main="survival sd - hm")
 caterpillar(sd_survival_hmi, main="survival sd - hmi")
 caterpillar(sd_survival_mn, main="survival sd - mn")
 
-caterpillar(sd_overall_survival_hm, main="survival sd - hm")
-caterpillar(sd_overall_survival_hmi, main="survival sd - hmi")
-caterpillar(sd_overall_survival_mn, main="survival sd - mn")
+caterpillar(sd_overall_survival_hm, main="overall survival sd - hm")
+caterpillar(sd_overall_survival_hmi, main="overall survival sd - hmi")
+caterpillar(sd_overall_survival_mn, main="overall survival sd - mn")
 
 # can we do something like rmse? I would think so
 # rmse <- function(x,y) sqrt(mean((x-y)^2, na.rm=TRUE))
@@ -445,7 +457,7 @@ plotthemboth(rmse_overall_survival_hm, rmse_overall_survival_hmi, rmse_overall_s
 # compare rp - this will be the kicker
 relative <- FALSE  # FALSE will calculate absolute accuracy
 
-rp_survival_hm <- rp_detection_hm <- rp_overall_survival_hm <- NA*psurvival
+rp_survival_hm <- rp_detection_hm <- rp_overall_survival_hm <- rep(NA, ncol(psurvivals))
 for(j in seq(nstations)) {
   rp_survival_hm[j] <- dsftools::rp(est_survival_hm[,j], psurvivals[,j], 
                                     confidence=0.95, relative=relative)
@@ -455,7 +467,7 @@ for(j in seq(nstations)) {
                                      confidence=0.95, relative=relative)
 }
 
-rp_survival_hmi <- rp_detection_hmi <- rp_overall_survival_hmi <- NA*psurvival
+rp_survival_hmi <- rp_detection_hmi <- rp_overall_survival_hmi <- rep(NA, ncol(psurvivals))
 for(j in seq(nstations)) {
   rp_survival_hmi[j] <- dsftools::rp(est_survival_hmi[,j], psurvivals[,j], 
                                      confidence=0.95, relative=relative)
@@ -465,7 +477,7 @@ for(j in seq(nstations)) {
                                       confidence=0.95, relative=relative)
 }
 
-rp_survival_mn <- rp_detection_mn <- rp_overall_survival_mn <- NA*psurvival
+rp_survival_mn <- rp_detection_mn <- rp_overall_survival_mn <- rep(NA, ncol(psurvivals))
 for(j in seq(nstations)) {
   rp_survival_mn[j] <- dsftools::rp(est_survival_mn[,j], psurvivals[,j], 
                                     confidence=0.95, relative=relative)
