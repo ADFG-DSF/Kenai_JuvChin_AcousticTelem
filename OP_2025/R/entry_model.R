@@ -1,16 +1,23 @@
 
 # metasimulation controls
-nsim <- 100   # 200 at 4k iter in 15 min on desktop
+nsim <- 500   # 200 at 4k iter in 15 min on desktop
+
+run_model <- TRUE
+plot_indiv_run <- FALSE
+save_results <- FALSE
+
+probabilities_fixed <- FALSE # if FALSE, allow probs to vary
+nbeta_sim <- 10 # effective sample size for beta distributions (bigger = more precise)
 
 
 
 # simulation controls
 nfish_sep <- c(200, 100, 100, 100) 
 
-phandling <- 0.9  # 1 - capture & handling mortality
+phandling <- 0.9  # 1 minus capture & handling mortality
 
-psurvival <- c(rep(0.95, 6), 0.9)
-pdetection <- c(rep(0.95, 6), 0.7)
+psurvival <- c(rep(0.95, 6), 0.9)   # 1 minus natural mortality at each station
+pdetection <- c(rep(0.95, 6), 0.7)  # probability of detection at each station
 
 
 
@@ -19,9 +26,6 @@ niter <- 4*1000   # should make this bigger when we do it for real
 ncores <- 6
 # ncores <- min(10, parallel::detectCores()-1)
 
-run_model <- TRUE
-plot_indiv_run <- FALSE
-save_results <- TRUE
 
 
 
@@ -35,6 +39,11 @@ library(jagshelper)
 nfish <- sum(nfish_sep)
 nstations <- length(psurvival)
 overall_survival <- sapply(seq_along(psurvival), \(x) prod(psurvival[1:x]))
+
+if(!probabilities_fixed) {
+  psurvival_input <- psurvival
+  pdetection_input <- pdetection
+}
 
 
 # initializing storage of simulation params in case these are simulated
@@ -51,6 +60,14 @@ if(run_model) {
   t_overall_start <- Sys.time()
   for(isim in 1:nsim) {
     
+    if(!probabilities_fixed) {
+      psurvival <- rbeta(nstations, 
+                         psurvival_input*nbeta_sim, (1-psurvival_input)*nbeta_sim)
+      pdetection <- rbeta(nstations, 
+                          pdetection_input*nbeta_sim, (1-pdetection_input)*nbeta_sim)
+    }
+    
+    
     X <- Y <- matrix(nrow=nfish, ncol=nstations)
     # Z <- rep(NA, nfish)
     # X is (unobserved) survival
@@ -58,7 +75,6 @@ if(run_model) {
     # Z is survived tagging
     
     
-    # no idea if this will work, it should be 1 1 1 x100, 2 2 2 x100, etc
     # a vector of which station fish were tagged above
     entry <- unlist(lapply(seq_along(nfish_sep), \(x) rep(x, nfish_sep[x])))
     
