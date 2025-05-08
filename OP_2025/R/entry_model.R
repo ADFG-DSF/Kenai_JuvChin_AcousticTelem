@@ -1,18 +1,44 @@
+# The purpose of this script is to further estimate the relative precision
+# of the estimation of detection and survival probabilities for the Kenai River
+# juvenile salmon telemetry project.
+
+# This script reflects the most up-to-date version of the model, which allows
+# late entry of individuals: that is, entry below the first array.  Since 
+# handling mortality is no longer conflated with survival probability at the 
+# first station, it is included as a parameter in simulation and in estimation.
+
+# For the purpose of estimating relative precision, a large sequence of full 
+# datasets are simulated according to the simulation controls below and the 
+# Bayesian model is run for each and all parameter estimates are saved for the 
+# purpose of comparing to assumed true values.  Note that uncertainty can be
+# incorporated in probability parameter inputs by simulating these according
+# to Beta distributions.
+
+# Following the results from Kenai_telem_rp.R, only the Hidden Markov (imputed)
+# model is used for estimation, as this was substantially fastest.
+
+
 
 # metasimulation controls
-nsim <- 500   # 200 at 4k iter in 15 min on desktop
+nsim <- 10000   # 10k sim at 4k iter in 12 hr on desktop
 
-run_model <- TRUE
-plot_indiv_run <- FALSE
-save_results <- FALSE
+run_model <- TRUE     # if TRUE, run the full simulation
+                      # if FALSE, load the last saved results for plotting
 
-probabilities_fixed <- FALSE # if FALSE, allow probs to vary
+plot_indiv_run <- FALSE  # if TRUE, produce model diagnostic plots
+                         # if FALSE, suppress these
+
+save_results <- TRUE  # if TRUE, automatically save simulation results
+                      # if FALSE, suppress this
+
+probabilities_fixed <- FALSE    # if TRUE, keep all probabilities to fixed values 
+                                # if FALSE, allow all probabilities to vary
 nbeta_sim <- 10 # effective sample size for beta distributions (bigger = more precise)
 
 
 
 # simulation controls
-nfish_sep <- c(200, 100, 100, 100) 
+nfish_sep <- c(200, 100, 100, 100)   # number of fish above each station, in sequence
 
 phandling <- 0.9  # 1 minus capture & handling mortality
 
@@ -22,7 +48,7 @@ pdetection <- c(rep(0.95, 6), 0.7)  # probability of detection at each station
 
 
 # JAGS controls
-niter <- 4*1000   # should make this bigger when we do it for real
+niter <- 10*1000   # should make this bigger when we do it for real
 ncores <- 6
 # ncores <- min(10, parallel::detectCores()-1)
 
@@ -43,6 +69,7 @@ overall_survival <- sapply(seq_along(psurvival), \(x) prod(psurvival[1:x]))
 if(!probabilities_fixed) {
   psurvival_input <- psurvival
   pdetection_input <- pdetection
+  phandling_input <- phandling
 }
 
 
@@ -65,6 +92,8 @@ if(run_model) {
                          psurvival_input*nbeta_sim, (1-psurvival_input)*nbeta_sim)
       pdetection <- rbeta(nstations, 
                           pdetection_input*nbeta_sim, (1-pdetection_input)*nbeta_sim)
+      phandling <- rbeta(1, 
+                         phandling_input*nbeta_sim, (1-phandling_input)*nbeta_sim)
     }
     
     
@@ -180,8 +209,9 @@ if(run_model) {
       caterpillar(kenai_jags_out_hm_entry, p="phandling")
       points(phandling)
     }
-  }
-  if(save_results) {
+  
+  if(save_results & (isim %% 100 == 0)) {
+    print("saving...")
     save(pdetections,
          psurvivals,
          overall_survivals,
@@ -199,6 +229,7 @@ if(run_model) {
          
          nfish_sep, nsim, niter, ncores,
          file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
+  }
   }
   print(Sys.time() - t_overall_start)
 } else {
@@ -237,7 +268,7 @@ abline(h=0, lty=1)
 
 ## RP in terms of absolute accuracy
 library(dsftools)
-confidence <- 0.9 # change this to 95% when we have more sims
+confidence <- 0.95 # change this to 95% when we have more sims
 relative <- FALSE # FALSE gives accuracy in absolute terms
 rp_pdetections <- rp_psurvivals <- rp_overall_survivals <- rep(NA, nstations)
 for(istation in 1:nstations) {

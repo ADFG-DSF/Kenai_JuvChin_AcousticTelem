@@ -1,0 +1,89 @@
+---
+title: "Analysis draft for OP"
+output: word_document
+date: "2025-05-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Analysis
+
+The CJS model may be formulated as a Bayesian Hidden Markov model, which will provide estimates of survival probability and detection probability associated with all listening arrays.  If tags are deployed at multiple levels with respect to arrays, handling mortality may be estimated as well.  Conceptually, this model consists of an unobserved state process, and an observed data process, as shown below for fish $i$ observed at array $j$:
+
+$X_{i,j} \sim Binom \left((\phi_j \times \lambda), 1 \right)$ when $j = t_i$
+
+$X_{i,j} \sim Binom(\phi_j, X_{i,j-1})$ for $j \in (t_i+1) \dots n_j$
+
+$Y_{i,j} \sim Binom(p_j, X_{i,j})$ for $j \in t_i \dots n_j$
+
+in which:
+
+$X$ and $Y$ denote (unobserved) survival and (observed) detection, respectively, expressed as values of 1, 0, or NA as appropriate;
+
+$t_i$ represents the time (array) of entry for fish $i$;
+
+$\phi_j$ and $p_j$ denote the probabilities of natural survival and detection at array $j$, respectively; and,
+
+$\lambda$ represents the probability of surviving handling and surgery. 
+
+Within this formulation, all parameters except $\phi_{n_j}$ and $p_{n_j}$ are estimable without the use of hierarchical distributions or informed priors, and all model validation was performed using non-informative Jeffreys $Beta \left(\frac{1}{2},\frac{1}{2} \right)$ priors on $p_.$, $\phi_.$, and $\lambda$.  However, since survival and detection are expected to be high, inferential precision may be increased by incorporating informed priors on these parameters.  Model fitting may be performed using JAGS (Plummer, 2003) called through R (R Core Team, 2025).
+
+Many elements of the state matrix $X$ may be algorithmicaly imputed, since survival at all times following entry may be inferred from detection at any time.  JAGS will interpret these nodes as data, while treating the remainder as unobserved parameters.  Imputation has no effect on model inferences, but decreases model run-time.
+
+The cumulative probability of survival from the first array to array $j$ can be calculated as a simple product:
+
+$\phi^{cumul}_j=\Pi_{k=1}^j \phi_k$
+
+## Sample size and anticipated precision
+
+To approximate the anticipated precision in estimating the probabilities of survival and detection, a Monte Carlo simulation was constructed under anticipated values of tag deployment, number of arrays, and respective probabilities of survival, detection, and handling mortality.  A large sequence of full datasets were simulated, and the above model was run and parameter estimates were saved for each replicated dataset, for the purpose of comparison to assumed true values.
+
+A total of 500 fish were assumed, with 6 inriver listening arrays and one array nearshore.  200 tagged fish were assumed to be released above the first array, and an additional 100 above each of the second, third, and fourth arrays.  Mean handling mortality was assumed a reasonable worst-case value of 10%, and mean survival and detection probabilities were assumed to be 95% associated with each of the inriver arrays, and 90% and 70% associated with the nearshore array, respectively.  Uncertainty in the probability parameters was incorporated by means of simulating these according to Beta distributions with an effective sample size of 10.
+
+500 acoustic tags deployed as described above will provide estimates within the following values of the respective parameters, 95% of the time, with values expressed as percentage points.  It is worth noting that survival and detection probability are not estimable at the final array.
+
+```{r, echo=FALSE}
+# load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
+load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_fixed.Rdata")
+
+nstations <- ncol(pdetections)
+
+## RP in terms of absolute accuracy
+library(dsftools)
+
+confidence <- 0.95 # change this to 95% when we have more sims
+relative <- FALSE # FALSE gives accuracy in absolute terms
+rp_pdetections <- rp_psurvivals <- rp_overall_survivals <- rep(NA, nstations)
+for(istation in 1:nstations) {
+  rp_pdetections[istation] <- rp(sim_vec = est_pdetections[, istation],
+                                 true_val = pdetections[, istation],
+                                 confidence = confidence, relative = relative)
+  rp_psurvivals[istation] <- rp(sim_vec = est_psurvivals[, istation],
+                                 true_val = psurvivals[, istation],
+                                 confidence = confidence, relative = relative)
+  rp_overall_survivals[istation] <- rp(sim_vec = est_overall_survivals[, istation],
+                                 true_val = overall_survivals[, istation],
+                                 confidence = confidence, relative = relative)
+}
+rp_phandlings <- rp(sim_vec = est_phandlings,
+                               true_val = phandlings,
+                               confidence = confidence, relative = relative)
+# plot(rp_pdetections, main="Abs accuracy - detection probability")
+# plot(rp_psurvivals, main="Abs accuracy - survival probability")
+# plot(rp_overall_survivals, main="Abs accuracy - cumulative survival probability")
+# plot(rp_phandlings, main="Abs accuracy - handling survival")
+
+out_tbl <- data.frame(Array=c("-",seq(nstations)),
+                      p=c("-",round(100*rp_pdetections,1)),
+                      phi=c("-",round(100*rp_psurvivals,1)),
+                      phi_cumul=c("-",round(100*rp_overall_survivals,1)),
+                      lambda=c(round(100*(rp_phandlings),1), 
+                               rep("-", ncol(psurvivals))))
+
+knitr::kable(out_tbl, digits=1)
+```
+
+All simulation and model code is available within the following Github repository:
+https://github.com/ADFG-DSF/Kenai_JuvChin_AcousticTelem

@@ -42,14 +42,18 @@ to a given receiver array:
          [,1] [,2] [,3] [,4] [,5] [,6]
     [1,]    1    1    1    1    0    1
     [2,]    1    0    1    1    1    0
-    [3,]    0    1    1    1    0    1
-    [4,]    1    0    1    0    0    0
+    [3,]    NA   1    1    1    0    1
+    [4,]    NA   0    1    0    0    0
     ...
 
 This may be conceptualized as an unobserved state process in which survival of 
-fish $i$ at time $j$ is conditionally distributed with probability $\phi_j$, that is:
+fish $i$ at time $j$ is conditionally distributed with natural survival probability 
+$\phi_j$ and handling survival probability $\lambda$, that is:
 
-$X_{i,j} \sim Binom(\phi_j, X_{i,j-1})$
+$X_{i,t_i} \sim Binom \right((\phi_{t_i} \times \lambda), 1 \left)$ at time of
+entry $t_i$, and
+
+$X_{i,j} \sim Binom(\phi_j, X_{i,j-1})$ thereafter.
 
 This gives rise to a data process, in which fish $i$ is detected at time $j$ 
 with conditional probability $p_j$ depending on survival, that is:
