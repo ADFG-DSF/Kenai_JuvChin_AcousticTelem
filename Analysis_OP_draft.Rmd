@@ -40,12 +40,13 @@ $\phi^{cumul}_j=\Pi_{k=1}^j \phi_k$
 
 To approximate the anticipated precision in estimating the probabilities of survival and detection, a Monte Carlo simulation was constructed under anticipated values of tag deployment, number of arrays, and respective probabilities of survival, detection, and handling mortality.  A large sequence of full datasets were simulated, and the above model was run and parameter estimates were saved for each replicated dataset, for the purpose of comparison to assumed true values.
 
-A total of 500 fish were assumed, with 6 inriver listening arrays and one array nearshore.  200 tagged fish were assumed to be released above the first array, and an additional 100 above each of the second, third, and fourth arrays.  Mean handling mortality was assumed a reasonable worst-case value of 10%, and mean survival and detection probabilities were assumed to be 95% associated with each of the inriver arrays, and 90% and 70% associated with the nearshore array, respectively.  Uncertainty in the probability parameters was incorporated by means of simulating these according to Beta distributions with an effective sample size of 20.
+A total of 500 fish were assumed, with 6 inriver listening arrays and one array nearshore.  200 tagged fish were assumed to be released above the first array, and an additional 100 above each of the second, third, and fourth arrays.  Mean handling mortality was assumed a reasonable worst-case value of 10%, and mean survival and detection probabilities were assumed to be 95% associated with each of the inriver arrays, and 90% and 70% associated with the nearshore array, respectively.  Uncertainty in the probability parameters was incorporated by means of simulating these according to Beta distributions with an effective sample size of 100.
 
 500 acoustic tags deployed as described above will provide estimates within the following values of the respective parameters, 90% of the time, with values expressed as percentage points.  It is worth noting that survival and detection probability are not estimable at the final array.
 
 ```{r, echo=FALSE}
-load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
+# load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
+load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_2k_varying100.Rdata")
 # load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_fixed.Rdata")
 
 nstations <- ncol(pdetections)
@@ -116,6 +117,8 @@ out_tbl <- data.frame(Array=c("-",seq(nstations)),
 
 knitr::kable(out_tbl, digits=1)
 ```
+
+The values values reported above are likely to be much more conservative than will be encountered in practice.  The simulation above assumed a worst-case scenario of six inriver listening arrays, whereas it is likely that eight will be deployed; more opportunities for detection of fish will certainly improve precision in estimation.  Furthermore, true probabilities of survival and detection may be much closer to 100% than the values used in simulation, further decreasing estimation variance.
 
 All simulation and model code is available within the following Github repository:
 https://github.com/ADFG-DSF/Kenai_JuvChin_AcousticTelem

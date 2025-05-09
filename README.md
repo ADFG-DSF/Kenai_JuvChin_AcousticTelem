@@ -50,7 +50,7 @@ This may be conceptualized as an unobserved state process in which survival of
 fish $i$ at time $j$ is conditionally distributed with natural survival probability 
 $\phi_j$ and handling survival probability $\lambda$, that is:
 
-$X_{i,t_i} \sim Binom \right((\phi_{t_i} \times \lambda), 1 \left)$ at time of
+$X_{i,t_i} \sim Binom \left((\phi_{t_i} \times \lambda), 1 \right)$ at time of
 entry $t_i$, and
 
 $X_{i,j} \sim Binom(\phi_j, X_{i,j-1})$ thereafter.

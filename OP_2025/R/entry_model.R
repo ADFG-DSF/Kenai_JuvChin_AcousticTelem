@@ -33,7 +33,7 @@ save_results <- TRUE  # if TRUE, automatically save simulation results
 
 probabilities_fixed <- FALSE    # if TRUE, keep all probabilities to fixed values 
                                 # if FALSE, allow all probabilities to vary
-nbeta_sim <- 20 # effective sample size for beta distributions (bigger = more precise)
+nbeta_sim <- 100 # effective sample size for beta distributions (bigger = more precise)
 
 
 
