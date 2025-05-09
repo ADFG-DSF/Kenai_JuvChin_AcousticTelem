@@ -33,7 +33,7 @@ save_results <- TRUE  # if TRUE, automatically save simulation results
 
 probabilities_fixed <- FALSE    # if TRUE, keep all probabilities to fixed values 
                                 # if FALSE, allow all probabilities to vary
-nbeta_sim <- 10 # effective sample size for beta distributions (bigger = more precise)
+nbeta_sim <- 20 # effective sample size for beta distributions (bigger = more precise)
 
 
 
@@ -268,21 +268,54 @@ abline(h=0, lty=1)
 
 ## RP in terms of absolute accuracy
 library(dsftools)
+
+# patch to dsftools::rp to allow NA values
+rp1 <- function(sim_vec, true_val, confidence = c(0.8, 0.9, 0.95, 0.99), 
+          accuracy = NA, relative = TRUE) {
+  if (!is.numeric(sim_vec)) 
+    stop("Non-numeric input to sim_vec=")
+  if (!is.numeric(true_val)) 
+    stop("Non-numeric input to true_val=")
+  
+  keepthese <- !is.na(sim_vec) & !is.na(true_val)
+  sim_vec <- sim_vec[keepthese]
+  true_val <- true_val[keepthese]
+  
+  if (relative) {
+    comparison_vec <- abs((sim_vec - true_val)/true_val)
+  }
+  else {
+    comparison_vec <- abs(sim_vec - true_val)
+  }
+  if (all(is.na(accuracy))) {
+    if (!is.numeric(confidence)) 
+      stop("Non-numeric input to confidence=")
+    out <- quantile(comparison_vec, p = confidence)
+  }
+  else {
+    if (!is.numeric(accuracy)) 
+      stop("Non-numeric input to accuracy=")
+    out <- colMeans(outer(comparison_vec, accuracy, FUN = "<="))
+    names(out) <- accuracy
+  }
+  return(out)
+}
+
 confidence <- 0.95 # change this to 95% when we have more sims
 relative <- FALSE # FALSE gives accuracy in absolute terms
 rp_pdetections <- rp_psurvivals <- rp_overall_survivals <- rep(NA, nstations)
 for(istation in 1:nstations) {
-  rp_pdetections[istation] <- rp(sim_vec = est_pdetections[, istation],
+  rp_pdetections[istation] <- rp1(sim_vec = est_pdetections[, istation],
                                  true_val = pdetections[, istation],
                                  confidence = confidence, relative = relative)
-  rp_psurvivals[istation] <- rp(sim_vec = est_psurvivals[, istation],
+  rp_psurvivals[istation] <- rp1(sim_vec = est_psurvivals[, istation],
                                  true_val = psurvivals[, istation],
                                  confidence = confidence, relative = relative)
-  rp_overall_survivals[istation] <- rp(sim_vec = est_overall_survivals[, istation],
+  rp_overall_survivals[istation] <- rp1(sim_vec = est_overall_survivals[, istation],
                                  true_val = overall_survivals[, istation],
                                  confidence = confidence, relative = relative)
 }
-rp_phandlings <- rp(sim_vec = est_phandlings,
+rp_phandlings <- rp1(sim_vec = est_phandlings,
                                true_val = phandlings,
                                confidence = confidence, relative = relative)
 plot(rp_pdetections, main="Abs accuracy - detection probability")

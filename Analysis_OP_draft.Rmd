@@ -40,34 +40,66 @@ $\phi^{cumul}_j=\Pi_{k=1}^j \phi_k$
 
 To approximate the anticipated precision in estimating the probabilities of survival and detection, a Monte Carlo simulation was constructed under anticipated values of tag deployment, number of arrays, and respective probabilities of survival, detection, and handling mortality.  A large sequence of full datasets were simulated, and the above model was run and parameter estimates were saved for each replicated dataset, for the purpose of comparison to assumed true values.
 
-A total of 500 fish were assumed, with 6 inriver listening arrays and one array nearshore.  200 tagged fish were assumed to be released above the first array, and an additional 100 above each of the second, third, and fourth arrays.  Mean handling mortality was assumed a reasonable worst-case value of 10%, and mean survival and detection probabilities were assumed to be 95% associated with each of the inriver arrays, and 90% and 70% associated with the nearshore array, respectively.  Uncertainty in the probability parameters was incorporated by means of simulating these according to Beta distributions with an effective sample size of 10.
+A total of 500 fish were assumed, with 6 inriver listening arrays and one array nearshore.  200 tagged fish were assumed to be released above the first array, and an additional 100 above each of the second, third, and fourth arrays.  Mean handling mortality was assumed a reasonable worst-case value of 10%, and mean survival and detection probabilities were assumed to be 95% associated with each of the inriver arrays, and 90% and 70% associated with the nearshore array, respectively.  Uncertainty in the probability parameters was incorporated by means of simulating these according to Beta distributions with an effective sample size of 20.
 
-500 acoustic tags deployed as described above will provide estimates within the following values of the respective parameters, 95% of the time, with values expressed as percentage points.  It is worth noting that survival and detection probability are not estimable at the final array.
+500 acoustic tags deployed as described above will provide estimates within the following values of the respective parameters, 90% of the time, with values expressed as percentage points.  It is worth noting that survival and detection probability are not estimable at the final array.
 
 ```{r, echo=FALSE}
-# load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
-load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_fixed.Rdata")
+load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
+# load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_fixed.Rdata")
 
 nstations <- ncol(pdetections)
 
 ## RP in terms of absolute accuracy
 library(dsftools)
 
-confidence <- 0.95 # change this to 95% when we have more sims
+# patch to dsftools::rp to allow NA values
+rp1 <- function(sim_vec, true_val, confidence = c(0.8, 0.9, 0.95, 0.99), 
+          accuracy = NA, relative = TRUE) {
+  if (!is.numeric(sim_vec)) 
+    stop("Non-numeric input to sim_vec=")
+  if (!is.numeric(true_val)) 
+    stop("Non-numeric input to true_val=")
+  
+  keepthese <- !is.na(sim_vec) & !is.na(true_val)
+  sim_vec <- sim_vec[keepthese]
+  true_val <- true_val[keepthese]
+  
+  if (relative) {
+    comparison_vec <- abs((sim_vec - true_val)/true_val)
+  }
+  else {
+    comparison_vec <- abs(sim_vec - true_val)
+  }
+  if (all(is.na(accuracy))) {
+    if (!is.numeric(confidence)) 
+      stop("Non-numeric input to confidence=")
+    out <- quantile(comparison_vec, p = confidence)
+  }
+  else {
+    if (!is.numeric(accuracy)) 
+      stop("Non-numeric input to accuracy=")
+    out <- colMeans(outer(comparison_vec, accuracy, FUN = "<="))
+    names(out) <- accuracy
+  }
+  return(out)
+}
+
+confidence <- 0.9 # change this to 95% when we have more sims?
 relative <- FALSE # FALSE gives accuracy in absolute terms
 rp_pdetections <- rp_psurvivals <- rp_overall_survivals <- rep(NA, nstations)
 for(istation in 1:nstations) {
-  rp_pdetections[istation] <- rp(sim_vec = est_pdetections[, istation],
+  rp_pdetections[istation] <- rp1(sim_vec = est_pdetections[, istation],
                                  true_val = pdetections[, istation],
                                  confidence = confidence, relative = relative)
-  rp_psurvivals[istation] <- rp(sim_vec = est_psurvivals[, istation],
+  rp_psurvivals[istation] <- rp1(sim_vec = est_psurvivals[, istation],
                                  true_val = psurvivals[, istation],
                                  confidence = confidence, relative = relative)
-  rp_overall_survivals[istation] <- rp(sim_vec = est_overall_survivals[, istation],
+  rp_overall_survivals[istation] <- rp1(sim_vec = est_overall_survivals[, istation],
                                  true_val = overall_survivals[, istation],
                                  confidence = confidence, relative = relative)
 }
-rp_phandlings <- rp(sim_vec = est_phandlings,
+rp_phandlings <- rp1(sim_vec = est_phandlings,
                                true_val = phandlings,
                                confidence = confidence, relative = relative)
 # plot(rp_pdetections, main="Abs accuracy - detection probability")
@@ -76,10 +108,10 @@ rp_phandlings <- rp(sim_vec = est_phandlings,
 # plot(rp_phandlings, main="Abs accuracy - handling survival")
 
 out_tbl <- data.frame(Array=c("-",seq(nstations)),
-                      p=c("-",round(100*rp_pdetections,1)),
-                      phi=c("-",round(100*rp_psurvivals,1)),
-                      phi_cumul=c("-",round(100*rp_overall_survivals,1)),
-                      lambda=c(round(100*(rp_phandlings),1), 
+                      `Detection`=c("-",round(100*rp_pdetections,1)),
+                      `Natural Survival`=c("-",round(100*rp_psurvivals,1)),
+                      `Cumulative Nat Survival`=c("-",round(100*rp_overall_survivals,1)),
+                      `Handling Mortality`=c(round(100*(rp_phandlings),1), 
                                rep("-", ncol(psurvivals))))
 
 knitr::kable(out_tbl, digits=1)

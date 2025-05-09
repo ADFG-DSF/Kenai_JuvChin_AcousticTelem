@@ -78,7 +78,27 @@ difference being run-time.
 
 ## Folder Contents
 
+* **Analysis_OP_draft.Rmd** This R Markdown file was created to produce text and
+simulation output to be pasted into the draft Operational Plan.
+
 ### /R
+
+* **entry_model.R** This script simulates a sequence of survival and detection
+probability vectors according to anticipated values, simulates detection histories 
+from each set of probabilities, and then runs the most current Hidden Markov model 
+using the simulated data as input to estimate parameters.  The inferential precision
+of the model is then evaluated by comparing the sequences of probability vectors
+to the values estimated by the candidate models.  The principal difference of the 
+**entry model** versus the previous set of candidate models is that it allows 
+the entrance of tagged individuals at multiple locations relative to listening 
+arrays, as well as incorporating handling survival (1-handling mortality) as 
+an estimable parameter.
+
+#### /R/obsolete 
+
+This folder contains a record of work under a previous state of the fieldwork 
+design, and does not reflect
+the current state of the project.
 
 * **Kenai_telem_rp.R** This script simulates a sequence of survival and detection
 probability vectors according to anticipated values, simulates detection histories 
@@ -103,3 +123,10 @@ The model file has quite a lot of unnecessary components and its current state
 represents several avenues of experimentation.  After developing the HM model, 
 this script was then repurposed for an early comparison between three candidate 
 models, by means of meta-simulation.  
+
+
+### /data
+
+This folder contains a sequence of .Rdata files representing specific simulations,
+that may be read as needed.  One is read in **Analysis_OP_draft.Rmd** in order to
+produce a table of anticpated inferential precision for each parameter of interest.
