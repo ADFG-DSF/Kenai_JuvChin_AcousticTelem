@@ -1,0 +1,12 @@
+Receiver Test deployed 5/1/25  15:21
+
+retrieved 5/2/25 14:00
+
+
+Receiver: 25183
+
+
+Reference tags: 
+0569  at 75m
+05B5  at 125m
+056B  at 175m

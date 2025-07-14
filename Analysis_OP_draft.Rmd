@@ -46,8 +46,9 @@ A total of 500 fish were assumed, with 6 inriver listening arrays and one array 
 
 ```{r, echo=FALSE}
 # load(file="OP_2025/data/Kenai_telem_hm_entry_simresults.Rdata")
-load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_2k_varying100.Rdata")
+# load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_2k_varying100.Rdata")
 # load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_fixed.Rdata")
+load(file="OP_2025/data/Kenai_telem_hm_entry_simresults_10k_varying100.Rdata")
 
 nstations <- ncol(pdetections)
 
