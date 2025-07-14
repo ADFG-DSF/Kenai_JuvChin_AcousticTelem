@@ -142,7 +142,8 @@ segments(x0=tapply(asdf_sort$DateTime, asdf_sort$TagCode, min),
 # plotting Tilt with respect to DateTime further suggests that late May was something else
 with(asdf_sort, plot(DateTime, Tilt))
 
-
+# which tag codes were identified as fish using this method?
+realfish1 <- sort(unique(asdf_sort$TagCode))
 
 
 
@@ -218,7 +219,7 @@ thefrac <- thegrid[,1]/thegrid[,2]
 par(mfrow=c(3,3))
 for(i in 1:length(datetime_secs_sub)) {
   thespectra <- spectra(x=datetime_secs_sub[[i]], 
-                        lam_min=1, lam_max = 10, n_lam=5000)
+                        lam_min=1, lam_max = 10, n_lam=2000)
   plot(thespectra$lam_trial, thespectra$strength, 
        log="x", type='l', main=names(datetime_secs_sub)[i], #col=0,
        xaxt="n")
@@ -229,22 +230,33 @@ for(i in 1:length(datetime_secs_sub)) {
 }
 
 
-# this didn't work like i hoped but it's something to keep trying
+### I want to know what happens when I identify ALL tag codes with ANY periodic component
+# okay, let's do it for fish with more than 20 records
 datetime_secs_sub2 <- datetime_secs[sapply(datetime_secs, length) > 20]
+length(datetime_secs_sub2)
 spectra_list <- list()
 near3 <- notnear3 <- NA
 del <- 0.5
 for(i in 1:length(datetime_secs_sub2)) {
-  tempresult <- spectra(datetime_secs_sub2[[i]], lam_min=1, lam_max=100, n_lam=5000)
+  # this is actually pretty stringent
+  tempresult <- spectra(datetime_secs_sub2[[i]], 
+                        lam_min=1, lam_max=100, n_lam=5000)
   spectra_list[[i]] <- tempresult$lam_trial[tempresult$strength >= 2*tempresult$strength_sidak]
   near3[i] <- length(spectra_list[[i]]) > 0 & any(spectra_list[[i]] > 3-del & spectra_list[[i]] < 3+del)
   notnear3[i] <- length(spectra_list[[i]]) > 0 & !any(spectra_list[[i]] > 3-del & spectra_list[[i]] < 3+del)
   print(i)
 }
 names(spectra_list) <- names(datetime_secs_sub2)
+
+# subset with a periodic peak near 3 sec
 near3_sub <- near3[sapply(spectra_list, length) > 0]
+
+# subset with a periodic peak, but somewhere else!
 notnear3_sub <- notnear3[sapply(spectra_list, length) > 0]
+
+# subset with a periodic peak somewhere
 spectra_list <- spectra_list[sapply(spectra_list, length) > 0]
+
 length(spectra_list)
 sum(near3)
 sum(notnear3)
@@ -265,6 +277,7 @@ abline(v=3*thefrac, lty=3, col=adjustcolor(1, alpha.f=.2))
 axis(2, seq_along(spectra_list), labels=names(spectra_list), las=2, cex.axis=.4, col=seq_along(spectra_list))
 
 
+# plotting spectral peaks for all that have a spike near 3 seconds
 par(mfrow=c(3,3))
 for(i in which(near3)) {
   thespectra <- spectra(datetime_secs_sub2[[i]], lam_min=1, lam_max=100, n_lam=5000)
@@ -276,6 +289,8 @@ for(i in which(near3)) {
   abline(h=thespectra$strength_sidak, lty=3)
   # axis(side=1, at=3*thefrac, labels=rep("", length(thefrac)))
 }
+
+# a bit more interesting: which have spike(s) somewhere else
 par(mfrow=c(3,2))
 for(i in which(notnear3)) {
   thespectra <- spectra(datetime_secs_sub2[[i]], lam_min=1, lam_max=100, n_lam=5000)
@@ -287,12 +302,44 @@ for(i in which(notnear3)) {
   abline(h=thespectra$strength_sidak, lty=3)
   # axis(side=1, at=3*thefrac, labels=rep("", length(thefrac)))
 }
+
+# plotting successive differences between pairs of observations
 par(mfrow=c(3,2))
 for(i in which(notnear3)) {
   # plot(sort(diff(datetime_secs_sub2[[i]])), log="y", ylim=c(1,300))
-  plot(diff(sort(datetime_secs_sub2[[i]])), log="y", ylim=c(1,300), yaxt="n")
+  plot(diff(sort(datetime_secs_sub2[[i]])), log="y", ylim=c(1,300), yaxt="n",
+       main=names(datetime_secs_sub2)[i])
   axis(2, c(3,6,9,30,60,90), las=2, cex.axis=.7)
   # abline(h=3*(1:50), col=adjustcolor(1, alpha.f=.2))
   abline(h=c(3,6,9), col=adjustcolor(4, alpha.f=.5))
   abline(h=c(30,60,90), col=adjustcolor(2, alpha.f=.5))
+}
+
+# which fish would have been identified by just the presence of a spectral peak
+realfish2 <- sort(names(spectra_list))
+
+either <- union(realfish1, realfish2)
+data.frame(either, either %in% realfish1, either %in% realfish2)
+
+
+
+
+### actually, maybe it's more computationally efficient to see if there are
+### "significant" spikes in successive differences (e.g. lots of diffs near 3 sec)
+### It's a hack, but hey, it might work!
+# ------ THIS DOES NOT WORK YET ------# 
+diffspikes <- function(x, lam_min=1, lam_max=120, n_lam=1000, log_scale=TRUE) { #, lam_trial=exp(seq(from=0, to=log(10), length.out=1000))) {
+  if(log_scale) {
+    lam_trial <- exp(seq(from=log(lam_min), to=log(lam_max), length.out=n_lam))
+  } else {
+    lam_trial <- seq(from=lam_min, to=lam_max, length.out=n_lam)
+  }
+  
+  # tally all diffs, using lam_trial as bins
+  xdiffs <- diff(sort(x))
+  thetab <- as.numeric(table(cut(xdiffs, breaks=lam_trial)))
+  
+  # generate a large number of comparable vectors, fully at random
+  xnull <- replicate(100, runif(n=length(x), min=min(x), max=max(x)))
+  xnull_diff <- apply(xnull, 2, \(xx) diff(sort(xx)))
 }
