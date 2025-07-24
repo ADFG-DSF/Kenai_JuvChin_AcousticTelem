@@ -9,12 +9,24 @@ library(vroom)
 # output_dir <- "/Users/dakotarygh/Desktop/JSATS Kenai Chinook Smolt Project/Code and Data/Marine Data/Cleaned Data"
 # unfiltered_clean_dir <- file.path(output_dir, "Unfiltered Clean Files")
 # taglist_path <- "/Users/dakotarygh/Desktop/JSATS Kenai Chinook Smolt Project/Code and Data/Marine Data/Tagged Fish Data/chinook_tagged.csv"
-input_dir  <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\lots_of_raw_data\\Stationary Raw Data"
-output_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\lots_of_raw_data\\Cleaned Data"
-unfiltered_clean_dir <- file.path(output_dir, "Unfiltered Clean Files")
-taglist_path <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\metadata\\chinook_tagged.csv"
 
-stationary_metadata_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\metadata\\StationaryMetadata.xlsx"
+# input_dir  <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\lots_of_raw_data\\Stationary Raw Data"
+# output_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\lots_of_raw_data\\Cleaned Data"
+# unfiltered_clean_dir <- file.path(output_dir, "Unfiltered Clean Files")
+# taglist_path <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\metadata\\chinook_tagged.csv"
+# 
+# stationary_metadata_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\JSATS_processing_experiments\\metadata\\StationaryMetadata.xlsx"
+
+input_dir  <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\Raw Data"
+output_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\Cleaned Data"
+unfiltered_clean_dir <- file.path(output_dir, "Unfiltered Clean Files")
+taglist_path <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\chinook_tagged.csv"
+
+# stationary_metadata_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\StationaryMetadata.csv"
+stationary_metadata_dir <- "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\StationaryMetadata.xlsx"
+
+
+
 
 # ── Load tagged fish IDs ──
 tagcodes_to_keep <- read_csv(taglist_path, show_col_types = FALSE) %>%
@@ -23,14 +35,30 @@ tagcodes_to_keep <- read_csv(taglist_path, show_col_types = FALSE) %>%
   pull(TAG_ID) %>%
   as.character()
 
+### date-time associated with release of each tag
+tagcodes_release <- read_csv(taglist_path, show_col_types = FALSE) %>%
+  # mutate(release_datetime = as.POSIXlt(paste(PULL_DATE, END)), format="%Y-%m-%d %H:%M:%OS") %>%
+  mutate(release_datetime = parse_date_time(paste(PULL_DATE, END), orders = "Ymd HMS", tz = "UTC")) %>%
+  filter(FATE == "R") %>%
+  select(TAG_ID, release_datetime) %>%
+  rename(TagCode=TAG_ID) %>%
+  distinct(TagCode, .keep_all = TRUE)
+
 ### Load stationary metadata
 StationaryMetadata <- readxl::read_xlsx(stationary_metadata_dir,
-                                        sheet="Metadata",
-                                        skip=1) %>% 
-  mutate(ArraySiteName_date = paste(str_replace_all(paste0(Array, SiteName), " ", ""),
+                                        sheet="Metadata"
+                                        ) %>% #skip=1
+  mutate(ArraySiteName_date = paste(str_replace_all(paste0(Array, SiteID), " ", ""),
                                     paste0(25, substr(as.character(DeploymentDate),6,7), 
                                            substr(as.character(DeploymentDate),9,10)), sep="_"))  %>%
   select(ArraySiteName_date, `River Kilometer`, Latitude, Longitude)   ### can keep additional columns too
+
+
+# StationaryMetadata <- read_csv(stationary_metadata_dir)
+# # add leading zeroes to sitename
+# # date to Date to character to substr?? or pull date elements from Date
+
+
 
 # ── Read and clean receiver-reset-enabled CSV ──
 read_clean_vroom <- function(file_path) {
@@ -69,12 +97,25 @@ read_clean_vroom <- function(file_path) {
   combined %>%
     filter(!is.na(TagCode)) %>%  # Only drop rows with missing tag values (real errors)
     
+    ### detecting Array from filename
+    mutate(Array = substr(strsplit(basename(file_path), "_")[[1]][1], 1, nchar(basename(file_path)) - 18 - nchar(SiteName))) %>%
+    
+    ### forcing SiteName to have 3 characters
+    mutate(SiteName = ifelse(nchar(SiteName)==1,
+                             paste0("00", SiteName),
+                             ifelse(nchar(SiteName)==2,
+                                    paste0("0", SiteName), 
+                                    SiteName))) %>%
+    
     ### inserting site metadata
-    mutate(ArraySiteName_date = paste(strsplit(basename(file_path), "_")[[1]][1:2], collapse ="_")) %>% 
+    # mutate(ArraySiteName_date = paste(strsplit(basename(file_path), "_")[[1]][1:2], collapse ="_")) %>% 
+    mutate(ArraySiteName_date = paste0(Array, SiteName, substr(basename(file_path),
+                                                               nchar(basename(file_path)) - 17,
+                                                               nchar(basename(file_path)) - 11))) %>%
     left_join(StationaryMetadata, by="ArraySiteName_date")  %>%
     
     ### selecting a subset of columns that are of interest
-    select(SiteName, DateTime, TagCode, 
+    select(Array, SiteName, DateTime, TagCode, 
            Tilt, SigStr, 
            ArraySiteName_date, 
            `River Kilometer`, Latitude, Longitude)
@@ -88,20 +129,25 @@ clean_but_unfiltered_data <- function(df) {
   initial_n <- nrow(df)
   
   df <- df %>%
-    select(any_of(c("DateTime", "TagCode", "Tilt", "SiteName"))) %>%
+    # select(any_of(c("DateTime", "TagCode", "Tilt", "SiteName"))) %>%
     mutate(
       TagCode = str_sub(TagCode, 4, 7),
       Tilt = as.numeric(Tilt),
       DateTime = parse_date_time(DateTime, orders = "mdY HMS", tz = "UTC")
-    ) %>%
-    filter(complete.cases(.))
+    ) %>%   ############################# took this out to preserve 
+    # filter(complete.cases(.))   ############################# took this out to preserve 
+    left_join(tagcodes_release, by="TagCode")  ####  
   
-  after_tag_filter_n <- df %>% filter(TagCode %in% tagcodes_to_keep) %>% nrow()
+  # after_tag_filter_n <- df %>% filter(TagCode %in% tagcodes_to_keep) %>% nrow()
   
   message("🧾 Initial rows: ", format(initial_n, big.mark = ","),
           " (", format(n_indiv(df), big.mark = ","), " individuals)")
   
-  df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  # df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  df <- df %>% filter(DateTime >= release_datetime) %>%
+    select(-release_datetime)
+  
+  after_tag_filter_n <- nrow(df)
   
   message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
           " (", format(n_indiv(df), big.mark = ","), " individuals)")
@@ -186,7 +232,20 @@ filter_tags_with_3_in_30s <- function(df) {
 csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
 ##### test case
-csv_files <- csv_files[1:3]
+# csv_files <- csv_files[1:6]
+
+### creating a summary table for processing
+the_tbl <- data.frame(file = basename(csv_files), 
+                      rows_init = NA,
+                      rows_unfiltered = NA,
+                      rows_filtered = NA,
+                      indiv_init = NA,
+                      indiv_unfiltered = NA,
+                      indiv_filtered = NA,
+                      metadata_found = NA)
+
+### storing a list of filtered data.frames for easy checking
+all_filtered <- list()
 
 for (file_path in csv_files) {
   
@@ -199,6 +258,9 @@ for (file_path in csv_files) {
     message("⚠️ Failed to read: ", basename(file_path), ": ", e$message)
     return(NULL)
   })
+  the_tbl$rows_init[which(csv_files==file_path)] <- nrow(df)
+  the_tbl$indiv_init[which(csv_files==file_path)] <- n_indiv(df)
+  the_tbl$metadata_found[which(csv_files==file_path)] <- all(!is.na(df$Latitude))
   if (is.null(df)) next
   
   # 💾 Save cleaned-but-unfiltered data (before tag filtering)
@@ -211,15 +273,116 @@ for (file_path in csv_files) {
     message("⚠️ Unfiltered cleaning failed: ", e$message)
     return(NULL)
   })
+  the_tbl$rows_unfiltered[which(csv_files==file_path)] <- nrow(unfiltered)
+  the_tbl$indiv_unfiltered[which(csv_files==file_path)] <- n_indiv(unfiltered)
   if (is.null(unfiltered)) next
   
   filtered <- tryCatch(apply_all_filters(unfiltered), error = function(e) {
     message("⚠️ Filtering failed: ", e$message)
     return(NULL)
   })
+  the_tbl$rows_filtered[which(csv_files==file_path)] <- nrow(filtered)
+  the_tbl$indiv_filtered[which(csv_files==file_path)] <- n_indiv(filtered)
+  all_filtered[[which(csv_files==file_path)]] <- filtered
   if (is.null(filtered)) next
   
   filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
   fwrite(filtered, filtered_out)
   message("✔ Saved: ", filtered_out)
 }
+the_tbl
+
+
+
+# # was SiteName something weird?
+# the_tbl$SiteName <- sapply(all_filtered, \(x) x$SiteName[1])
+# the_tbl
+
+## which receiver data files were not found in the metadata?
+receiver_files <- sapply(strsplit(the_tbl$file,"_"), \(x) paste(x[1:2], collapse="_"))
+
+# these were found
+receiver_files[receiver_files %in% StationaryMetadata$ArraySiteName_date] %>% 
+  sort
+
+# these were NOT found
+receiver_files[!(receiver_files %in% StationaryMetadata$ArraySiteName_date)] %>% 
+  sort
+
+# these metadata entries had associated files
+StationaryMetadata$ArraySiteName_date[StationaryMetadata$ArraySiteName_date %in% receiver_files] %>% 
+  sort
+
+# these metadata entries did NOT have associated files
+StationaryMetadata$ArraySiteName_date[!(StationaryMetadata$ArraySiteName_date %in% receiver_files)] %>% 
+  sort
+
+
+
+# smashing all data together into one data.frame
+all_filtered_df <- do.call(rbind, all_filtered)
+### this should ultimately be saved as an external .csv file
+
+
+### summarizing passage date for each individual
+
+# orig metadata
+metadata_rivermile <- readxl::read_xlsx(stationary_metadata_dir,
+                                        sheet="Metadata") %>%
+  mutate(Array = str_replace_all(Array, "[ ']", "")) %>%
+  mutate(Array = ifelse(Array %in% c("MarineNorth", "MarineSouth"), "Marine", Array)) %>% #### take this out as needed
+  select(Array, `River Mile`, `River Kilometer`) %>%
+  group_by(Array) %>%
+  summarise(rivermile = mean(`River Mile`, na.rm=TRUE),
+            river_km = mean(`River Kilometer`, na.rm=TRUE)) %>%
+  mutate(Array_order = paste(str_pad(rank(rivermile, ties.method="first"), 2, "left", "0"), Array)) %>%
+  mutate(Array_order_rev = paste(str_pad(1+nrow(.)-rank(rivermile, ties.method="first"), 2, "left", "0"), Array))
+
+# summarizing as the DateTime of greatest signal strength, per TagCode & Array
+all_filtered_passage <- all_filtered_df %>%
+  mutate(Array = ifelse(Array %in% c("MarineNorth", "MarineSouth"), "Marine", Array)) %>% #### take this out as needed
+  group_by(TagCode, Array) %>%
+  summarise(passage = DateTime[which.max(SigStr)]) %>%
+  mutate(Array=ifelse(Array=="Mile19SB", "Mile19", Array)) %>%
+  mutate(Array=ifelse(Array=="KeyesPropertySB", "KeyesProperty", Array)) %>%
+  left_join(metadata_rivermile) %>%
+  mutate(passage=as.POSIXlt(passage, format="%m/%d/%Y %H:%M:%OS"))
+### this should ultimately be saved as an external .csv file
+
+
+
+# plotting!!!!!!
+library(patchwork)
+
+plot1 <- all_filtered_passage %>%
+  ggplot(aes(x=passage, y=Array_order, colour=TagCode, group=TagCode)) +
+  geom_point() +
+  geom_line() +
+  theme_bw() +
+  # xlab("Passage Date (max sig strength)") +
+  xlab("") +
+  ylab("Array (ordered)")
+
+plot2 <- all_filtered_passage %>%
+  ggplot(aes(x=passage, y=river_km, colour=TagCode, group=TagCode)) +
+  geom_point() +
+  geom_line() +
+  theme_bw()  +
+  xlab("Passage Date (max sig strength)") +
+  ylab("River km")
+
+plot1 / plot2 + plot_layout(guides="collect")
+
+
+
+## making survival matrix
+surv_mat_tibble <- pivot_wider(all_filtered_passage,
+                        id_cols=TagCode,
+                        names_from = Array_order_rev,
+                        values_from = passage)
+surv_mat <- surv_mat_tibble[,order(colnames(surv_mat_tibble))] %>%
+  (\(x) x[, colnames(x) != "TagCode"]) %>%
+  as.matrix %>%
+  is.na %>% `!`
+rownames(surv_mat) <- surv_mat_tibble$TagCode
+  
