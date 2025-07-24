@@ -234,6 +234,9 @@ csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 ##### test case
 # csv_files <- csv_files[1:6]
 
+#### removing a bad file??
+csv_files <- csv_files[csv_files != "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\Raw Data/Mile33078_250623_143501.csv"]
+
 ### creating a summary table for processing
 the_tbl <- data.frame(file = basename(csv_files), 
                       rows_init = NA,
