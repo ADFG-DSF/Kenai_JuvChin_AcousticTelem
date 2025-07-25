@@ -38,7 +38,8 @@ tagcodes_to_keep <- read_csv(taglist_path, show_col_types = FALSE) %>%
 ### date-time associated with release of each tag
 tagcodes_release <- read_csv(taglist_path, show_col_types = FALSE) %>%
   # mutate(release_datetime = as.POSIXlt(paste(PULL_DATE, END)), format="%Y-%m-%d %H:%M:%OS") %>%
-  mutate(release_datetime = parse_date_time(paste(PULL_DATE, END), orders = "Ymd HMS", tz = "UTC")) %>%
+  # mutate(release_datetime = parse_date_time(paste(PULL_DT, END), orders = "Ymd HMS", tz = "UTC")) %>%
+  mutate(release_datetime = END_DT) %>%
   filter(FATE == "R") %>%
   select(TAG_ID, release_datetime) %>%
   rename(TagCode=TAG_ID) %>%
