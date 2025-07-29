@@ -144,15 +144,30 @@ clean_but_unfiltered_data <- function(df) {
   message("🧾 Initial rows: ", format(initial_n, big.mark = ","),
           " (", format(n_indiv(df), big.mark = ","), " individuals)")
   
-  # df <- df %>% filter(TagCode %in% tagcodes_to_keep)
-  df <- df %>% filter(DateTime >= release_datetime) %>%
-    select(-release_datetime)
+  # # df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  # df <- df %>% filter(DateTime >= release_datetime) %>%
+  #   select(-release_datetime)
+  # 
+  # after_tag_filter_n <- nrow(df)
+  # 
+  # message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
+  #         " (", format(n_indiv(df), big.mark = ","), " individuals)")
+  
+  df %>% 
+    apply_tagcode_filter
+}
+
+apply_tagcode_filter <- function(df, message=TRUE) {
+  df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  # df <- df %>% filter(DateTime >= release_datetime) %>%
+  #   select(-release_datetime)
   
   after_tag_filter_n <- nrow(df)
   
+  if(message) {
   message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
           " (", format(n_indiv(df), big.mark = ","), " individuals)")
-  
+  }
   df
 }
 
@@ -200,13 +215,13 @@ apply_multipath_filter <- function(df, threshold_sec) {
 }
 
 # ── Keep tags with ~3-second ping intervals ──
-filter_tags_with_consistent_3s_intervals <- function(df) {
+filter_tags_with_consistent_3s_intervals <- function(df, period=3, delta=0.5) {
   df %>%
     arrange(SiteName, TagCode, DateTime) %>%
     group_by(SiteName, TagCode) %>%
     mutate(
       TimeDiff = as.numeric(difftime(DateTime, lag(DateTime), units = "secs")),
-      ValidInterval = TimeDiff >= 2.5 & TimeDiff <= 3.5,
+      ValidInterval = TimeDiff >= (period-delta) & TimeDiff <= (period+delta),
       ValidCount = sum(ValidInterval, na.rm = TRUE)
     ) %>%
     ungroup() %>%
@@ -215,17 +230,17 @@ filter_tags_with_consistent_3s_intervals <- function(df) {
 }
 
 # ── Filter for at least 3 detections in 30 seconds ──
-filter_tags_with_3_in_30s <- function(df) {
+filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30) {
   df %>%
     arrange(SiteName, TagCode, DateTime) %>%
     group_by(SiteName, TagCode) %>%
     mutate(
       DetectionCount = map_int(seq_along(DateTime), function(i) {
-        sum(abs(as.numeric(difftime(DateTime[i], DateTime, units = "secs"))) <= 30)
+        sum(abs(as.numeric(difftime(DateTime[i], DateTime, units = "secs"))) <= t_sec)
       })
     ) %>%
     ungroup() %>%
-    filter(DetectionCount >= 3) %>%
+    filter(DetectionCount >= n_events) %>%
     select(-DetectionCount)
 }
 
@@ -327,66 +342,7 @@ StationaryMetadata$ArraySiteName_date[!(StationaryMetadata$ArraySiteName_date %i
 all_filtered_df <- do.call(rbind, all_filtered)
 ### this should ultimately be saved as an external .csv file
 
-
-### summarizing passage date for each individual
-
-# orig metadata
-metadata_rivermile <- readxl::read_xlsx(stationary_metadata_dir,
-                                        sheet="Metadata") %>%
-  mutate(Array = str_replace_all(Array, "[ ']", "")) %>%
-  mutate(Array = ifelse(Array %in% c("MarineNorth", "MarineSouth"), "Marine", Array)) %>% #### take this out as needed
-  select(Array, `River Mile`, `River Kilometer`) %>%
-  group_by(Array) %>%
-  summarise(rivermile = mean(`River Mile`, na.rm=TRUE),
-            river_km = mean(`River Kilometer`, na.rm=TRUE)) %>%
-  mutate(Array_order = paste(str_pad(rank(rivermile, ties.method="first"), 2, "left", "0"), Array)) %>%
-  mutate(Array_order_rev = paste(str_pad(1+nrow(.)-rank(rivermile, ties.method="first"), 2, "left", "0"), Array))
-
-# summarizing as the DateTime of greatest signal strength, per TagCode & Array
-all_filtered_passage <- all_filtered_df %>%
-  mutate(Array = ifelse(Array %in% c("MarineNorth", "MarineSouth"), "Marine", Array)) %>% #### take this out as needed
-  group_by(TagCode, Array) %>%
-  summarise(passage = DateTime[which.max(SigStr)]) %>%
-  mutate(Array=ifelse(Array=="Mile19SB", "Mile19", Array)) %>%
-  mutate(Array=ifelse(Array=="KeyesPropertySB", "KeyesProperty", Array)) %>%
-  left_join(metadata_rivermile) %>%
-  mutate(passage=as.POSIXlt(passage, format="%m/%d/%Y %H:%M:%OS"))
-### this should ultimately be saved as an external .csv file
+write_csv(all_filtered_df, file=paste0(output_dir, "\\all_filtered.csv"))
 
 
 
-# plotting!!!!!!
-library(patchwork)
-
-plot1 <- all_filtered_passage %>%
-  ggplot(aes(x=passage, y=Array_order, colour=TagCode, group=TagCode)) +
-  geom_point() +
-  geom_line() +
-  theme_bw() +
-  # xlab("Passage Date (max sig strength)") +
-  xlab("") +
-  ylab("Array (ordered)")
-
-plot2 <- all_filtered_passage %>%
-  ggplot(aes(x=passage, y=river_km, colour=TagCode, group=TagCode)) +
-  geom_point() +
-  geom_line() +
-  theme_bw()  +
-  xlab("Passage Date (max sig strength)") +
-  ylab("River km")
-
-plot1 / plot2 + plot_layout(guides="collect")
-
-
-
-## making survival matrix
-surv_mat_tibble <- pivot_wider(all_filtered_passage,
-                        id_cols=TagCode,
-                        names_from = Array_order_rev,
-                        values_from = passage)
-surv_mat <- surv_mat_tibble[,order(colnames(surv_mat_tibble))] %>%
-  (\(x) x[, colnames(x) != "TagCode"]) %>%
-  as.matrix %>%
-  is.na %>% `!`
-rownames(surv_mat) <- surv_mat_tibble$TagCode
-  
