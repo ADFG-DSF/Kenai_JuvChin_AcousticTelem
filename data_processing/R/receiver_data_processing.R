@@ -55,9 +55,6 @@ StationaryMetadata <- readxl::read_xlsx(stationary_metadata_dir,
   select(ArraySiteName_date, `River Kilometer`, Latitude, Longitude)   ### can keep additional columns too
 
 
-# StationaryMetadata <- read_csv(stationary_metadata_dir)
-# # add leading zeroes to sitename
-# # date to Date to character to substr?? or pull date elements from Date
 
 
 
@@ -109,7 +106,6 @@ read_clean_vroom <- function(file_path) {
                                     SiteName))) %>%
     
     ### inserting site metadata
-    # mutate(ArraySiteName_date = paste(strsplit(basename(file_path), "_")[[1]][1:2], collapse ="_")) %>% 
     mutate(ArraySiteName_date = paste0(Array, SiteName, substr(basename(file_path),
                                                                nchar(basename(file_path)) - 17,
                                                                nchar(basename(file_path)) - 11))) %>%
@@ -126,7 +122,7 @@ read_clean_vroom <- function(file_path) {
 n_indiv <- function(df) length(unique(df$TagCode))
 
 # ── Clean but unfiltered detection dataframe ──
-clean_but_unfiltered_data <- function(df) {
+clean_but_unfiltered_data <- function(df, message=TRUE) {
   initial_n <- nrow(df)
   
   df <- df %>%
@@ -141,8 +137,10 @@ clean_but_unfiltered_data <- function(df) {
   
   # after_tag_filter_n <- df %>% filter(TagCode %in% tagcodes_to_keep) %>% nrow()
   
+  if(message) {
   message("🧾 Initial rows: ", format(initial_n, big.mark = ","),
           " (", format(n_indiv(df), big.mark = ","), " individuals)")
+  }
   
   # # df <- df %>% filter(TagCode %in% tagcodes_to_keep)
   # df <- df %>% filter(DateTime >= release_datetime) %>%
@@ -153,12 +151,23 @@ clean_but_unfiltered_data <- function(df) {
   # message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
   #         " (", format(n_indiv(df), big.mark = ","), " individuals)")
   
-  df %>% 
-    apply_tagcode_filter
+  df
+}
+
+
+### pre-filter to only allow individuals with n hits
+apply_prefilter <- function(df, n=2) {
+  thetable <- table(df$TagCode)
+  to_keep <- names(thetable[thetable >= n])
+  subset(df, TagCode %in% to_keep)
 }
 
 apply_tagcode_filter <- function(df, message=TRUE) {
+  
+  ### Version 1: check whether TagCode is in the list 
   df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  
+  # ### Version 2: check whether TagCode has been released
   # df <- df %>% filter(DateTime >= release_datetime) %>%
   #   select(-release_datetime)
   
@@ -173,7 +182,11 @@ apply_tagcode_filter <- function(df, message=TRUE) {
 
 # ── Apply all filtering steps ──
 apply_all_filters <- function(df) {
-  after_multipath <- df %>%
+  after_tagcode <- df %>%
+    apply_prefilter(n=2)  #### change this as needed!!!
+    apply_tagcode_filter
+  
+  after_multipath <- after_tagcode %>%
     apply_multipath_filter(threshold_sec = multipath_threshold)
   message("🎯 After multipath filter: ", format(nrow(after_multipath), big.mark = ","),
           " (", format(n_indiv(after_multipath), big.mark = ","), " individuals)")
@@ -244,6 +257,86 @@ filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30) {
     select(-DetectionCount)
 }
 
+# ── Filter for at least 3 detections in 30 seconds ──
+filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30) {
+  # diffs <- tapply(df$DateTime, df$TagCode, \(x) diff(sort(as.numeric(x))))
+  # these <- rep(FALSE, length(diffs))
+  # lengths <- unname(sapply(diffs, length))
+  # for(i in which(lengths >= n_events)) {
+  #   i_event <- 1
+  #   while(!these[i] & (i_event+n_events-1 <= lengths[i])) {
+  #     these[i] <- sum(diffs[[i]][i_event + (1:(n_events-1))]) <= t_sec
+  #     i_event <- i_event+1
+  #   }
+  # }
+  # subset(df, TagCode %in% names(diffs)[these])
+  # # ^^ this will not work, it will return all tags for which this is ever true
+  bytag_df <- tapply(df, df$TagCode, \(x) x)
+  bytag_toreturn <- list()
+  if(n_events > 100) n_events <- 100  # maxing this out at 100!
+  for(itag in seq_along(bytag_df)) {
+    
+    # reorder to be sure
+    bytag_df[[itag]] <- bytag_df[[itag]][order(bytag_df[[itag]]$DateTime),]
+    
+    # create a staggered matrix of numeric datetimes
+    stagmat <- matrix(nrow=nrow(bytag_df[[itag]])+n_events-1, ncol=n_events)
+    
+    # populating it
+    for(j in 1:n_events) {
+      stagmat[(1:nrow(bytag_df[[itag]]))+j-1, j] <- as.numeric(bytag_df[[itag]]$DateTime)
+    }
+    
+    # sum of successive differences
+    sumdiffs <- apply(stagmat, 1, \(x) sum(abs(diff(x))))
+    theserows <- sumdiffs <= t_sec
+    theserows[is.na(theserows)] <- FALSE
+    
+    # reusing stagmat, maybe it saves on memory!
+    stagmat <- matrix(FALSE, nrow=nrow(bytag_df[[itag]])+n_events-1, ncol=n_events)
+    
+    # populating it
+    for(j in 1:n_events) {
+      stagmat[(1:nrow(bytag_df[[itag]]))+j-1, j] <- theserows[1:nrow(bytag_df[[itag]])]
+    }
+    
+    # which rows to use for each tag?
+    # returnthese <- apply(stagmat[1:nrow(bytag_df[[itag]]),], 1, any, na.rm=TRUE)
+    returnthese <- apply(stagmat[-(1:(n_events-1)),], 1, any, na.rm=TRUE)
+    bytag_toreturn[[itag]] <- bytag_df[[itag]][returnthese,]
+  }
+  
+  # smash it all into one dataframe
+  return(do.call(rbind, bytag_toreturn))
+}
+
+df0 <- df
+df <- df0
+df1 <- subset(df, TagCode=="B5A5")
+
+{
+  tstart <- Sys.time()
+  aaaa <- filter_tags_with_3_in_30s(df1)
+  Sys.time() - tstart
+} # Time difference of 40.84626 secs
+{
+  tstart <- Sys.time()
+  bbbb <- filter_tags_with_3_in_30s_v2(df1)
+  Sys.time() - tstart
+} # Time difference of 0.6515019 secs
+dim(aaaa)
+dim(bbbb)
+dim(df1)
+
+aaaa %>% ggplot(aes(x=DateTime, y=TagCode)) + geom_point()
+bbbb %>% ggplot(aes(x=DateTime, y=TagCode)) + geom_point()
+df1 %>% ggplot(aes(x=DateTime, y=TagCode)) + geom_point()
+
+table(df0$TagCode)
+table(aaaa$TagCode)
+table(bbbb$TagCode)
+
+
 # ── Main processing loop ──
 csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
@@ -251,7 +344,7 @@ csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 # csv_files <- csv_files[1:6]
 
 #### removing a bad file??
-csv_files <- csv_files[csv_files != "C:\\Users\\mbtyers\\Documents\\Current Projects\\Kenai_JuvChin_AcousticTelem\\data_processing\\TESTING\\Raw Data/Mile33078_250623_143501.csv"]
+csv_files <- csv_files[basename(csv_files) != "Mile33078_250623_143501.csv"]
 
 ### creating a summary table for processing
 the_tbl <- data.frame(file = basename(csv_files), 
