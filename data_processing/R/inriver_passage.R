@@ -86,6 +86,7 @@ metadata_rivermile <- readxl::read_xlsx(stationary_metadata_dir,
 # summarizing as the DateTime of greatest signal strength, per TagCode & Array
 all_filtered_passage <- all_filtered_df %>%
   mutate(Array = ifelse(Array %in% c("MarineNorth", "MarineSouth"), "Marine", Array)) %>% #### take this out as needed
+  mutate(TagCode = factor(TagCode, levels=sort(unique(tagging_data$TagCode)))) %>%
   group_by(TagCode, Array) %>%
   summarise(passage = DateTime[which.max(SigStr)]) %>%
   mutate(Array=ifelse(Array=="Mile19SB", "Mile19", Array)) %>%
@@ -164,16 +165,18 @@ plot1 <- all_filtered_passage %>%
   ylab("Array (ordered)")
 
 plot2 <- rbind(data.frame(TagCode = tagging_data$TagCode,
-                          Array = "tagging",
+                          # Array = "tagging",
                           passage = tagging_data$release_datetime,
-                          rivermile = NA,
-                          river_km = tagging_data$rkm_riverdist,
-                          Array_order = NA,
-                          Array_order_rev = "0 tagging"), all_filtered_passage) %>%
+                          # rivermile = NA,
+                          river_km = tagging_data$rkm_riverdist),
+                          # Array_order = NA,
+                          # Array_order_rev = "0 tagging"), 
+               select(all_filtered_passage, c("passage", "river_km", "TagCode"))) %>%
   ggplot(aes(x=passage, y=river_km, colour=TagCode, group=TagCode)) +
   geom_point() +
   geom_line() +
   theme_bw()  +
+  theme(legend.position = "none") +
   xlab("Passage Date (max sig strength)") +
   ylab("River km")
 
@@ -182,10 +185,12 @@ plot1 / plot2 + plot_layout(guides="collect")
 
 
 ## making detection matrix
+
 detect_mat_tibble <- pivot_wider(all_filtered_passage,
                                id_cols=TagCode,
                                names_from = Array_order_rev,
-                               values_from = passage)
+                               values_from = passage, 
+                               id_expand = TRUE)
 detect_mat <- detect_mat_tibble[,order(colnames(detect_mat_tibble))] %>%
   (\(x) x[, colnames(x) != "TagCode"]) %>%
   as.matrix %>%
@@ -219,3 +224,4 @@ for(check in sort(unique(detect_mat_tagging$array_entry_vec))) {
   plot(colMeans(detect_mat[detect_mat_tagging$array_entry_vec==check,,drop=F]),
        main=check)
 }
+
