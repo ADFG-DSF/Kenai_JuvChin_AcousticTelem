@@ -1,4 +1,4 @@
-# library(tidyverse)
+library(tidyverse)
 
 ### reading data
 
@@ -6,20 +6,27 @@
 
 readJSATS <- function(filename) {
   # detecting the regions that correspond to data tables
-  as_lines <- readLines(filename)
+  as_lines <- suppressWarnings(readLines(filename))
   starts <- which(substr(as_lines, 1, 8) == "Internal")
   ends <- which(substr(as_lines, 1, 8) == "File End")
+  
   # reading tables and compiling as a list
   raw_data <- list()
   for(i in seq_along(starts)) {
-    raw_data[[i]] <- read.csv(filename, 
-                              skip=starts[i]+1, 
-                              nrows=ends[i]-starts[i]-2,
-                              header=FALSE)
-    colnames(raw_data[[i]]) <- colnames(read.csv(filename, 
-                                                 skip=starts[i]-1, 
-                                                 nrows=0,
-                                                 header=TRUE))
+    # raw_data[[i]] <- read.csv(filename, 
+    #                           skip=starts[i]+1, 
+    #                           nrows=ends[i]-starts[i]-2,
+    #                           header=FALSE)
+    # colnames(raw_data[[i]]) <- colnames(read.csv(filename, 
+    #                                              skip=starts[i]-1, 
+    #                                              nrows=0,
+    #                                              header=TRUE))
+    
+    # let's do this tidyverse style (probably cleaner)
+    raw_data[[i]] <- read_csv(filename,
+                              skip = starts[i]-1,
+                              n_max = ends[i] - starts[i] - 2)
+    
     # converting DateTime from character 
     raw_data[[i]]$DateTime <- as.POSIXct(raw_data[[i]]$DateTime, 
                                          format="%m/%d/%Y %H:%M:%OS")
@@ -77,7 +84,15 @@ for(i in 1:length(datetime_diffs_3secs)) plot(datetime_diffs_3secs[[i]], log="y"
 # datetime_diffs_tbls
 
 
-
+# I'm curious: how many 
+npertag <- as.numeric(table(asdf$TagCode))
+trialvals <- c(1:10, 
+               seq(15, 25, by=5),
+               30, 40,
+               seq(50, 250, by=50),
+               seq(300, 1000, by=100))
+nperval <- sapply(trialvals, \(x) sum(npertag>=x))
+plot(trialvals, nperval, log="xy")
 
 
 ## TRIAL FILTRATION METHOD:

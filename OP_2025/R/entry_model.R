@@ -22,7 +22,7 @@
 # metasimulation controls
 nsim <- 10000   # 10k sim at 4k iter in 12 hr on desktop
 
-run_model <- TRUE     # if TRUE, run the full simulation
+run_model <- FALSE#TRUE     # if TRUE, run the full simulation
                       # if FALSE, load the last saved results for plotting
 
 plot_indiv_run <- FALSE  # if TRUE, produce model diagnostic plots
@@ -85,7 +85,7 @@ sd_phandlings <- rep(NA, nsim)
 
 if(run_model) {
   t_overall_start <- Sys.time()
-  for(isim in 1:nsim) {
+  for(isim in 6176:nsim) {
     
     if(!probabilities_fixed) {
       psurvival <- rbeta(nstations, 
