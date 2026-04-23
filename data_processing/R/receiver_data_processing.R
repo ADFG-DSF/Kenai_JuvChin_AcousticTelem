@@ -461,6 +461,88 @@ shinyApp(ui = ui, server = server)
 
 
 
+# ── TEST CASE OF Main processing loop ──
+
+apply_all_filters_reorder <- function(df) {
+  df %>%
+    apply_prefilter %>%
+    apply_tagcode_filter %>%
+    filter_tags_with_consistent_3s_intervals %>%
+    filter_tags_with_3_in_30s_v2 #%>%
+    # apply_multipath_filter
+}
+
+csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+
+##### test case
+# csv_files <- csv_files[1:6]
+
+#### removing a bad file??
+csv_files <- csv_files[basename(csv_files) != "Mile33078_250623_143501.csv"]
+
+### creating a summary table for processing
+the_tbl <- data.frame(file = basename(csv_files), 
+                      rows_init = NA,
+                      rows_unfiltered = NA,
+                      rows_filtered = NA,
+                      indiv_init = NA,
+                      indiv_unfiltered = NA,
+                      indiv_filtered = NA,
+                      metadata_found = NA)
+
+### storing a list of filtered data.frames for easy checking
+all_filtered <- list()
+
+for (file_path in csv_files) {
+  
+  ### this is silly but it's kinda nice to know how far it's gotten
+  cat("file", which(csv_files==file_path), "of", length(csv_files),'\n')
+  
+  message("📄 Processing: ", basename(file_path))
+  
+  df <- tryCatch(read_clean_vroom(file_path), error = function(e) {
+    message("⚠️ Failed to read: ", basename(file_path), ": ", e$message)
+    return(NULL)
+  })
+  the_tbl$rows_init[which(csv_files==file_path)] <- nrow(df)
+  the_tbl$indiv_init[which(csv_files==file_path)] <- n_indiv(df)
+  the_tbl$metadata_found[which(csv_files==file_path)] <- all(!is.na(df$Latitude))
+  if (is.null(df)) next
+  
+  # # 💾 Save cleaned-but-unfiltered data (before tag filtering)
+  # unfiltered_vroom_out <- file.path(unfiltered_clean_dir, paste0("Unfiltered_", basename(file_path)))
+  # fwrite(df, unfiltered_vroom_out)
+  # message("💾 Saved unfiltered vroom-cleaned file: ", unfiltered_vroom_out)
+  
+  
+  unfiltered <- tryCatch(clean_but_unfiltered_data(df), error = function(e) {
+    message("⚠️ Unfiltered cleaning failed: ", e$message)
+    return(NULL)
+  })
+  the_tbl$rows_unfiltered[which(csv_files==file_path)] <- nrow(unfiltered)
+  the_tbl$indiv_unfiltered[which(csv_files==file_path)] <- n_indiv(unfiltered)
+  if (is.null(unfiltered)) next
+  
+  filtered <- tryCatch(apply_all_filters_reorder(unfiltered), error = function(e) {
+    message("⚠️ Filtering failed: ", e$message)
+    return(NULL)
+  })
+  the_tbl$rows_filtered[which(csv_files==file_path)] <- nrow(filtered)
+  the_tbl$indiv_filtered[which(csv_files==file_path)] <- n_indiv(filtered)
+  all_filtered[[which(csv_files==file_path)]] <- filtered
+  if (is.null(filtered)) next
+  
+  # filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
+  # fwrite(filtered, filtered_out)
+  # message("✔ Saved: ", filtered_out)
+}
+the_tbl
+
+
+
+
+
+
 # ── Main processing loop ──
 csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
