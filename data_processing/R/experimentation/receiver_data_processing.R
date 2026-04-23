@@ -122,8 +122,14 @@ read_clean_vroom <- function(file_path) {
 ### quick function to summarize number of individuals
 n_indiv <- function(df) length(unique(df$TagCode))
 
+### generalized function to print summary message
+print_message <- function(df, the_message) {
+  message(the_message, ": ", format(nrow(df), big.mark = ","),
+          " (", format(n_indiv(df), big.mark = ","), " individuals)")
+}
+
 # ── Clean but unfiltered detection dataframe ──
-clean_but_unfiltered_data <- function(df, message=TRUE) {
+clean_but_unfiltered_data <- function(df, message=FALSE) {
   initial_n <- nrow(df)
   
   df <- df %>%
@@ -139,8 +145,9 @@ clean_but_unfiltered_data <- function(df, message=TRUE) {
   # after_tag_filter_n <- df %>% filter(TagCode %in% tagcodes_to_keep) %>% nrow()
   
   if(message) {
-  message("🧾 Initial rows: ", format(initial_n, big.mark = ","),
-          " (", format(n_indiv(df), big.mark = ","), " individuals)")
+  # message("🧾 Initial rows: ", format(initial_n, big.mark = ","),
+  #         " (", format(n_indiv(df), big.mark = ","), " individuals)")
+    print_message(df, "✍️ Initial rows")
   }
   
   # # df <- df %>% filter(TagCode %in% tagcodes_to_keep)
@@ -157,81 +164,96 @@ clean_but_unfiltered_data <- function(df, message=TRUE) {
 
 
 ### pre-filter to only allow individuals with n hits
-apply_prefilter <- function(df, n=2) {
+apply_prefilter <- function(df, n=2, message=FALSE) {
   thetable <- table(df$TagCode)
   to_keep <- names(thetable[thetable >= n])
-  subset(df, TagCode %in% to_keep)
+  df_out <- subset(df, TagCode %in% to_keep)
+  
+  if(message) {
+    print_message(df_out, "🧹 After prefilter")
+  }
+  df_out
 }
 
-apply_tagcode_filter <- function(df, message=TRUE) {
+apply_tagcode_filter <- function(df, tagcodes_to_keep=tagcodes_to_keep, message=FALSE) {
   
   ### Version 1: check whether TagCode is in the list 
-  df <- df %>% filter(TagCode %in% tagcodes_to_keep)
+  df_out <- df %>% filter(TagCode %in% tagcodes_to_keep)
   
   # ### Version 2: check whether TagCode has been released
   # df <- df %>% filter(DateTime >= release_datetime) %>%
   #   select(-release_datetime)
   
-  after_tag_filter_n <- nrow(df)
+  # after_tag_filter_n <- nrow(df)
+  # 
+  # if(message) {
+  # message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
+  #         " (", format(n_indiv(df), big.mark = ","), " individuals)")
+  # }
+  # df
   
   if(message) {
-  message("🎣 After TagCode filter: ", format(after_tag_filter_n, big.mark = ","),
-          " (", format(n_indiv(df), big.mark = ","), " individuals)")
+    print_message(df_out, "🎣 After TagCode filter")
   }
-  df
+  df_out
 }
 
-# ── Apply all filtering steps ──
-apply_all_filters <- function(df) {
-  after_tagcode <- df %>%
-    apply_prefilter(n=2)  %>%  #### change this as needed!!!
-    apply_tagcode_filter
-  
-  after_multipath <- after_tagcode %>%
-    apply_multipath_filter(threshold_sec = multipath_threshold)
-  message("🎯 After multipath filter: ", format(nrow(after_multipath), big.mark = ","),
-          " (", format(n_indiv(after_multipath), big.mark = ","), " individuals)")
-  
-  after_3sec <- after_multipath %>%
-    filter_tags_with_consistent_3s_intervals()
-  message("⏱ After 3-sec ping filter: ", format(nrow(after_3sec), big.mark = ","),
-          " (", format(n_indiv(after_3sec), big.mark = ","), " individuals)")
-  
-  after_3in30 <- after_3sec %>%
-    # filter_tags_with_3_in_30s()
-    filter_tags_with_3_in_30s_v2()
-  message("🔁 After 3-in-30s burst filter: ", format(nrow(after_3in30), big.mark = ","),
-          " (", format(n_indiv(after_3in30), big.mark = ","), " individuals)")
-  
-  final <- after_3in30 %>%
-    arrange(DateTime) %>%
-    select(SiteName, everything()) %>%
-    mutate(DateTime = format(DateTime, "%m/%d/%Y %H:%M:%S")) %>%
-    select(SiteName, everything())
-  
-  message("✅ Final rows: ", format(nrow(final), big.mark = ","),
-          " (", format(n_indiv(final), big.mark = ","), " individuals)")
-  
-  final
-}
+# # ── Apply all filtering steps ──
+# apply_all_filters <- function(df) {
+#   after_tagcode <- df %>%
+#     apply_prefilter(n=2)  %>%  #### change this as needed!!!
+#     apply_tagcode_filter
+#   
+#   after_multipath <- after_tagcode %>%
+#     apply_multipath_filter() #threshold_sec = multipath_threshold)
+#   message("🎯 After multipath filter: ", format(nrow(after_multipath), big.mark = ","),
+#           " (", format(n_indiv(after_multipath), big.mark = ","), " individuals)")
+#   
+#   after_3sec <- after_multipath %>%
+#     filter_tags_with_consistent_3s_intervals()
+#   message("⏱ After 3-sec ping filter: ", format(nrow(after_3sec), big.mark = ","),
+#           " (", format(n_indiv(after_3sec), big.mark = ","), " individuals)")
+#   
+#   after_3in30 <- after_3sec %>%
+#     # filter_tags_with_3_in_30s()
+#     filter_tags_with_3_in_30s_v2()
+#   message("🔁 After 3-in-30s burst filter: ", format(nrow(after_3in30), big.mark = ","),
+#           " (", format(n_indiv(after_3in30), big.mark = ","), " individuals)")
+#   
+#   final <- after_3in30 %>%
+#     arrange(DateTime) %>%
+#     select(SiteName, everything()) %>%
+#     mutate(DateTime = format(DateTime, "%m/%d/%Y %H:%M:%S")) %>%
+#     select(SiteName, everything())
+#   
+#   message("✅ Final rows: ", format(nrow(final), big.mark = ","),
+#           " (", format(n_indiv(final), big.mark = ","), " individuals)")
+#   
+#   final
+# }
 
 # ── Multipath threshold (seconds) ──
-multipath_threshold <- 0.3
+# multipath_threshold <- 0.3
 
 # ── Filter rapid multipath detections ──
-apply_multipath_filter <- function(df, threshold_sec) {
-  df %>%
+apply_multipath_filter <- function(df, threshold_sec=0.3, message=FALSE) {
+  df_out <- df %>%
     arrange(SiteName, TagCode, DateTime) %>%
     group_by(SiteName, TagCode) %>%
     mutate(TimeDiff = as.numeric(difftime(DateTime, lag(DateTime), units = "secs"))) %>%
     filter(is.na(TimeDiff) | TimeDiff >= threshold_sec) %>%
     ungroup() %>%
     select(-TimeDiff)
+  
+  if(message) {
+    print_message(df_out, "〽️ After multipath filter")
+  }
+  df_out
 }
 
 # ── Keep tags with ~3-second ping intervals ──
-filter_tags_with_consistent_3s_intervals <- function(df, period=3, delta=0.5) {
-  df %>%
+filter_tags_with_consistent_3s_intervals <- function(df, period=3, delta=0.5, message=FALSE) {
+  df_out <- df %>%
     arrange(SiteName, TagCode, DateTime) %>%
     group_by(SiteName, TagCode) %>%
     mutate(
@@ -242,11 +264,16 @@ filter_tags_with_consistent_3s_intervals <- function(df, period=3, delta=0.5) {
     ungroup() %>%
     filter(ValidCount >= 2) %>%
     select(-TimeDiff, -ValidInterval, -ValidCount)
+  
+  if(message) {
+    print_message(df_out, "⏰ After interval filter")
+  }
+  df_out
 }
 
 # ── Filter for at least 3 detections in 30 seconds ──
-filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30) {
-  df %>%
+filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30, message=FALSE) {
+  df_out <- df %>%
     arrange(SiteName, TagCode, DateTime) %>%
     group_by(SiteName, TagCode) %>%
     mutate(
@@ -257,10 +284,15 @@ filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30) {
     ungroup() %>%
     filter(DetectionCount >= n_events) %>%
     select(-DetectionCount)
+  
+  if(message) {
+    print_message(df_out, "*️⃣ After event filter")
+  }
+  df_out
 }
 
 # ── Filter for at least 3 detections in 30 seconds (much faster) ──
-filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30) {
+filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30, message=FALSE) {
   
   if(nrow(df) == 0) return(df) 
   
@@ -302,7 +334,12 @@ filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30) {
   
   # smash it all into one dataframe
   # return(tibble(do.call(rbind, bytag_toreturn)))
-  return(do.call(rbind, bytag_toreturn))
+  df_out <- do.call(rbind, bytag_toreturn)
+  
+  if(message) {
+    print_message(df_out, "*️⃣ After event filter")
+  }
+  df_out
 }
 
 
@@ -360,7 +397,7 @@ server <- shinyServer(function(input, output) {
   df2 <- reactive({
     if(input$f1=="None") df2 <- df1()
     if(input$f1=="Event") df2 <- filter_tags_with_3_in_30s_v2(df1(), input$n_events, input$t_sec)
-    if(input$f1=="Tag Code") df2 <- apply_tagcode_filter(df1(), message=FALSE)
+    if(input$f1=="Tag Code") df2 <- apply_tagcode_filter(df1(), tagcodes_to_keep=tagcodes_to_keep, message=FALSE)
     if(input$f1=="Multipath") df2 <- apply_multipath_filter(df1(), input$thresh)
     if(input$f1=="Interval") df2 <- filter_tags_with_consistent_3s_intervals(df1(), input$period, input$delta)
     df2
@@ -369,7 +406,7 @@ server <- shinyServer(function(input, output) {
   df3 <- reactive({
     if(input$f2=="None") df3 <- df2()
     if(input$f2=="Event") df3 <- filter_tags_with_3_in_30s_v2(df2(), input$n_events, input$t_sec)
-    if(input$f2=="Tag Code") df3 <- apply_tagcode_filter(df2(), message=FALSE)
+    if(input$f2=="Tag Code") df3 <- apply_tagcode_filter(df2(), tagcodes_to_keep=tagcodes_to_keep, message=FALSE)
     if(input$f2=="Multipath") df3 <- apply_multipath_filter(df2(), input$thresh)
     if(input$f2=="Interval") df3 <- filter_tags_with_consistent_3s_intervals(df2(), input$period, input$delta)
     df3
@@ -378,7 +415,7 @@ server <- shinyServer(function(input, output) {
   df4 <- reactive({
     if(input$f3=="None") df4 <- df3()
     if(input$f3=="Event") df4 <- filter_tags_with_3_in_30s_v2(df3(), input$n_events, input$t_sec)
-    if(input$f3=="Tag Code") df4 <- apply_tagcode_filter(df3(), message=FALSE)
+    if(input$f3=="Tag Code") df4 <- apply_tagcode_filter(df3(), tagcodes_to_keep=tagcodes_to_keep, message=FALSE)
     if(input$f3=="Multipath") df4 <- apply_multipath_filter(df3(), input$thresh)
     if(input$f3=="Interval") df4 <- filter_tags_with_consistent_3s_intervals(df3(), input$period, input$delta)
     df4
@@ -387,7 +424,7 @@ server <- shinyServer(function(input, output) {
   df_out <- reactive({
     if(input$f4=="None") df5 <- df4()
     if(input$f4=="Event") df5 <- filter_tags_with_3_in_30s_v2(df4(), input$n_events, input$t_sec)
-    if(input$f4=="Tag Code") df5 <- apply_tagcode_filter(df4(), message=FALSE)
+    if(input$f4=="Tag Code") df5 <- apply_tagcode_filter(df4(), tagcodes_to_keep=tagcodes_to_keep, message=FALSE)
     if(input$f4=="Multipath") df5 <- apply_multipath_filter(df4(), input$thresh)
     if(input$f4=="Interval") df5 <- filter_tags_with_consistent_3s_intervals(df4(), input$period, input$delta)
     return(df5)
@@ -461,20 +498,40 @@ shinyApp(ui = ui, server = server)
 
 
 
-# ── TEST CASE OF Main processing loop ──
+# ──----------- Main processing loop -----------──
 
-apply_all_filters_reorder <- function(df) {
+### --- LOOP CONTROLS --- ###
+
+# Set filtration order & parameters here!!
+apply_all_filters_reorder <- function(df, message=FALSE) {
   df %>%
-    apply_prefilter %>%
-    apply_tagcode_filter %>%
-    filter_tags_with_consistent_3s_intervals %>%
-    filter_tags_with_3_in_30s_v2 #%>%
-    # apply_multipath_filter
+    apply_prefilter(n=2, 
+                    message=message) %>%
+    
+    apply_tagcode_filter(tagcodes_to_keep=tagcodes_to_keep, 
+                         message=message) %>%
+    filter_tags_with_consistent_3s_intervals(period=3, delta=0.5, 
+                                             message=message) %>%
+    filter_tags_with_3_in_30s_v2(n_events=3, t_sec=30, 
+                                 message=message) %>%
+    apply_multipath_filter(threshold_sec=0.3, 
+                           message=message)
 }
+
+# Whether to save output to external files, or just create summary table
+save_output <- FALSE
+
+# Whether to print summary messages of numbers of entries & individuals
+message <- TRUE
+
+
+
+
+### --- initializing processing loop --- ###
 
 csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
-##### test case
+##### taking a subset to test
 # csv_files <- csv_files[1:6]
 
 #### removing a bad file??
@@ -509,13 +566,15 @@ for (file_path in csv_files) {
   the_tbl$metadata_found[which(csv_files==file_path)] <- all(!is.na(df$Latitude))
   if (is.null(df)) next
   
-  # # 💾 Save cleaned-but-unfiltered data (before tag filtering)
-  # unfiltered_vroom_out <- file.path(unfiltered_clean_dir, paste0("Unfiltered_", basename(file_path)))
-  # fwrite(df, unfiltered_vroom_out)
-  # message("💾 Saved unfiltered vroom-cleaned file: ", unfiltered_vroom_out)
+  if(save_output) {
+    # 💾 Save cleaned-but-unfiltered data (before tag filtering)
+    unfiltered_vroom_out <- file.path(unfiltered_clean_dir, paste0("Unfiltered_", basename(file_path)))
+    fwrite(df, unfiltered_vroom_out)
+    message("💾 Saved unfiltered vroom-cleaned file: ", unfiltered_vroom_out)
+  }
   
   
-  unfiltered <- tryCatch(clean_but_unfiltered_data(df), error = function(e) {
+  unfiltered <- tryCatch(clean_but_unfiltered_data(df, message=message), error = function(e) {
     message("⚠️ Unfiltered cleaning failed: ", e$message)
     return(NULL)
   })
@@ -523,7 +582,7 @@ for (file_path in csv_files) {
   the_tbl$indiv_unfiltered[which(csv_files==file_path)] <- n_indiv(unfiltered)
   if (is.null(unfiltered)) next
   
-  filtered <- tryCatch(apply_all_filters_reorder(unfiltered), error = function(e) {
+  filtered <- tryCatch(apply_all_filters_reorder(unfiltered, message=message), error = function(e) {
     message("⚠️ Filtering failed: ", e$message)
     return(NULL)
   })
@@ -532,83 +591,86 @@ for (file_path in csv_files) {
   all_filtered[[which(csv_files==file_path)]] <- filtered
   if (is.null(filtered)) next
   
-  # filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
-  # fwrite(filtered, filtered_out)
-  # message("✔ Saved: ", filtered_out)
+  if(save_output) {
+    filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
+    fwrite(filtered, filtered_out)
+    message("✔ Saved: ", filtered_out)
+  }
 }
 the_tbl
+sum(the_tbl$rows_filtered) / sum(the_tbl$rows_init)  # global acceptance rate
+mean(the_tbl$rows_filtered / the_tbl$rows_init)  # mean acceptance rate across files
 
 
 
 
 
-
-# ── Main processing loop ──
-csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
-
-##### test case
-# csv_files <- csv_files[1:6]
-
-#### removing a bad file??
-csv_files <- csv_files[basename(csv_files) != "Mile33078_250623_143501.csv"]
-
-### creating a summary table for processing
-the_tbl <- data.frame(file = basename(csv_files), 
-                      rows_init = NA,
-                      rows_unfiltered = NA,
-                      rows_filtered = NA,
-                      indiv_init = NA,
-                      indiv_unfiltered = NA,
-                      indiv_filtered = NA,
-                      metadata_found = NA)
-
-### storing a list of filtered data.frames for easy checking
-all_filtered <- list()
-
-for (file_path in csv_files) {
-  
-  ### this is silly but it's kinda nice to know how far it's gotten
-  cat("file", which(csv_files==file_path), "of", length(csv_files),'\n')
-  
-  message("📄 Processing: ", basename(file_path))
-  
-  df <- tryCatch(read_clean_vroom(file_path), error = function(e) {
-    message("⚠️ Failed to read: ", basename(file_path), ": ", e$message)
-    return(NULL)
-  })
-  the_tbl$rows_init[which(csv_files==file_path)] <- nrow(df)
-  the_tbl$indiv_init[which(csv_files==file_path)] <- n_indiv(df)
-  the_tbl$metadata_found[which(csv_files==file_path)] <- all(!is.na(df$Latitude))
-  if (is.null(df)) next
-  
-  # 💾 Save cleaned-but-unfiltered data (before tag filtering)
-  unfiltered_vroom_out <- file.path(unfiltered_clean_dir, paste0("Unfiltered_", basename(file_path)))
-  fwrite(df, unfiltered_vroom_out)
-  message("💾 Saved unfiltered vroom-cleaned file: ", unfiltered_vroom_out)
-  
-  
-  unfiltered <- tryCatch(clean_but_unfiltered_data(df), error = function(e) {
-    message("⚠️ Unfiltered cleaning failed: ", e$message)
-    return(NULL)
-  })
-  the_tbl$rows_unfiltered[which(csv_files==file_path)] <- nrow(unfiltered)
-  the_tbl$indiv_unfiltered[which(csv_files==file_path)] <- n_indiv(unfiltered)
-  if (is.null(unfiltered)) next
-  
-  filtered <- tryCatch(apply_all_filters(unfiltered), error = function(e) {
-    message("⚠️ Filtering failed: ", e$message)
-    return(NULL)
-  })
-  the_tbl$rows_filtered[which(csv_files==file_path)] <- nrow(filtered)
-  the_tbl$indiv_filtered[which(csv_files==file_path)] <- n_indiv(filtered)
-  all_filtered[[which(csv_files==file_path)]] <- filtered
-  if (is.null(filtered)) next
-  
-  filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
-  fwrite(filtered, filtered_out)
-  message("✔ Saved: ", filtered_out)
-}
-the_tbl
+# # ── Main processing loop ──
+# csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+# 
+# ##### test case
+# # csv_files <- csv_files[1:6]
+# 
+# #### removing a bad file??
+# csv_files <- csv_files[basename(csv_files) != "Mile33078_250623_143501.csv"]
+# 
+# ### creating a summary table for processing
+# the_tbl <- data.frame(file = basename(csv_files), 
+#                       rows_init = NA,
+#                       rows_unfiltered = NA,
+#                       rows_filtered = NA,
+#                       indiv_init = NA,
+#                       indiv_unfiltered = NA,
+#                       indiv_filtered = NA,
+#                       metadata_found = NA)
+# 
+# ### storing a list of filtered data.frames for easy checking
+# all_filtered <- list()
+# 
+# for (file_path in csv_files) {
+#   
+#   ### this is silly but it's kinda nice to know how far it's gotten
+#   cat("file", which(csv_files==file_path), "of", length(csv_files),'\n')
+#   
+#   message("📄 Processing: ", basename(file_path))
+#   
+#   df <- tryCatch(read_clean_vroom(file_path), error = function(e) {
+#     message("⚠️ Failed to read: ", basename(file_path), ": ", e$message)
+#     return(NULL)
+#   })
+#   the_tbl$rows_init[which(csv_files==file_path)] <- nrow(df)
+#   the_tbl$indiv_init[which(csv_files==file_path)] <- n_indiv(df)
+#   the_tbl$metadata_found[which(csv_files==file_path)] <- all(!is.na(df$Latitude))
+#   if (is.null(df)) next
+#   
+#   # 💾 Save cleaned-but-unfiltered data (before tag filtering)
+#   unfiltered_vroom_out <- file.path(unfiltered_clean_dir, paste0("Unfiltered_", basename(file_path)))
+#   fwrite(df, unfiltered_vroom_out)
+#   message("💾 Saved unfiltered vroom-cleaned file: ", unfiltered_vroom_out)
+#   
+#   
+#   unfiltered <- tryCatch(clean_but_unfiltered_data(df), error = function(e) {
+#     message("⚠️ Unfiltered cleaning failed: ", e$message)
+#     return(NULL)
+#   })
+#   the_tbl$rows_unfiltered[which(csv_files==file_path)] <- nrow(unfiltered)
+#   the_tbl$indiv_unfiltered[which(csv_files==file_path)] <- n_indiv(unfiltered)
+#   if (is.null(unfiltered)) next
+#   
+#   filtered <- tryCatch(apply_all_filters(unfiltered), error = function(e) {
+#     message("⚠️ Filtering failed: ", e$message)
+#     return(NULL)
+#   })
+#   the_tbl$rows_filtered[which(csv_files==file_path)] <- nrow(filtered)
+#   the_tbl$indiv_filtered[which(csv_files==file_path)] <- n_indiv(filtered)
+#   all_filtered[[which(csv_files==file_path)]] <- filtered
+#   if (is.null(filtered)) next
+#   
+#   filtered_out <- file.path(output_dir, paste0("Cleaned_", basename(file_path)))
+#   fwrite(filtered, filtered_out)
+#   message("✔ Saved: ", filtered_out)
+# }
+# the_tbl
 
 
 

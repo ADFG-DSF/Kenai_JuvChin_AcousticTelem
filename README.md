@@ -1,38 +1,25 @@
-# Kenai River Chinook Salmon Smolt Acoustic Telemetry Study, 2025
+# Kenai River Chinook Salmon Smolt Acoustic Telemetry Study, 2026-2027
 
-This pilot study will be the first year of a 3-year collaboration with the 
+This study will be the final two years of a three-year collaboration between the 
 Alaska Department of Fish and Game (ADF&G) and University of Alaska Fairbanks 
-(UAF) that will use juvenile salmon acoustic telemetry system (JSATS) technology 
-to investigate the juvenile life stage of Kenai River Chinook salmon. A 
-combination of minnow traps, beach seines, and other devices will be deployed to 
-capture Chinook salmon smolt in the Kenai River drainage. A sample of up to 500 
-Chinook salmon smolt of taggable size will be surgically implanted with acoustic 
-transmitters and allowed to continue their downstream migration. Downstream 
-movements and inriver behavior of tagged fish will be tracked by ADF&G using 
-strategically placed hydrophone receiver arrays spanning the Kenai River. Early 
-marine behavior and survival of tagged smolt will be studied by UAF and ADF&G 
-using hydrophone receivers in the nearshore waters of Cook Inlet near the Kenai 
-River mouth. Hydrophone receivers will be downloaded periodically to determine 
-fish passage, timing, location, migratory behavior, and survivorship. Mobile 
-boat tracking may also be conducted to track tagged smolt to further understand 
-migratory behavior and survival.  In addition, a feasibility study will be 
-conducted in late fall 2025 to determine if rearing Chinook salmon juveniles 
-can be acoustic tagged and tracked to overwintering locations. This first year 
-of the 3-year collaborative study will be focused on capacity building and 
-determining successful techniques to acoustically tag and track fish. The 
-study design will be refined for the second and third study years based on 
-insights learned from this initial study in 2025. 
+(UAF) using juvenile salmon acoustic telemetry system (JSATS) technology for the 
+first time in the State of Alaska to investigate the smolt life stage of Kenai 
+River Chinook salmon. The primary purpose of this project is to improve 
+understanding of Chinook salmon smolt behavior and survival as they migrate from 
+the Kenai River into the marine nearshore waters of Cook Inlet. Minnow traps, 
+beach seines, and other devices will be deployed to capture Chinook salmon smolt 
+in the Kenai River drainage to surgically implant with an acoustic transmitter 
+and release to continue their downstream migration. Movements, behavior, and 
+survival of tagged fish will be monitored with strategically placed hydrophone 
+receiver arrays in the Kenai River and nearshore waters of Cook Inlet near the 
+Kenai River mouth.
 
-# /OP_2025
+A previous iteration of this study was conducted in 2025, which represented a 
+pilot effort.
 
-To date, all simulation and analysis work has been directly pertaining to the 
-Operational Plan written in 2025, specifically:
 
-* Construction of a modeling framework and validating model appropriateness
 
-* Estimation of expected inferential precision, by means of simulation.
-
-## Modeling overview
+# Modeling overview
 
 Estimation of survival and detection probabilities will be possible from detection
 histories for each instrumented fish, which may be formatted like the following 
@@ -76,13 +63,76 @@ as derived from the relative survival and detection probabilities.
 To date, all three model formulations give fully equivalent inferences; the only
 difference being run-time.
 
-## Folder Contents
 
-* **Analysis_OP_draft.Rmd** This R Markdown file was created to produce text and
+# Data processing overview
+
+Due to the high degree of ambient acoustic noise in a riverine or nearshore 
+environment, it can be expected that the vast majority of acoustic signals 
+recorded by each listening array will be acoustic artifacts rather than 
+instrumented fish.  It will therefore be necessary to employ a suite of data 
+filters in order to ensure data quality and prevent compromising inferences.  
+Within a set of receiver files spanning much of the 2025 field season, an 
+overall filtering acceptance rate of substantially less than 1% was observed.
+
+The following filters have been developed, and will likely be employed in this order:
+
+- Prefilter: Allow entries for which some minimum number of entries (default of 2) exist for each tag number.
+
+- Tag Code filter: Allow entries for which tag number exists in the library of tags that have been deployed.
+
+- Interval filter: Allow entries for which the time interval between entries of a given tag is consistent with the beep rate (default of 2.5-3.5 seconds).
+
+- Event filter: Allow entries for which at least some number of entries (default of 3) have been recorded for a given tag within some amount of time (default of 30 seconds).
+
+- Multipath filter: Exclude entries that represent a reflected signal, that is, within a threshold value (default of 0.3 seconds) of another entry.
+
+
+# Folder Contents
+
+## /data_processing
+
+### /data_processing/R
+
+**receiver_data.processing.R** is the script **intended for all data processing.**
+
+This script is outlined as follows:
+
+  * Data directories to the appropriate locations
+  * Reading and filtration algorithms are defined as functions
+  * An interactive Shiny app is defined to allow for fine-tuning of filtration steps and parameters
+  * Finally, a processing loop is defined which may be run with or without saving data.  It is recommended to run this first without saving data as a final test of filtration steps.
+
+**inriver_passage.R** is a trial script for summarizing inriver passage from 
+all *filtered* receiver data to date.
+
+#### /data_processing/experimentation
+
+This folder contains some early experiments with data processing, which were 
+superceded by receiver_data.processing.R
+
+### /data_processing/test_data
+
+This folder contains a single receiver file intended for testing
+
+### /data_processing/TESTING
+
+This folder contains all raw files and subfolders associated with the full processing
+script.
+
+## /spatial
+
+This folder contains an R script used to create a rivernetwork object for the 
+Kenai river, and the associated .Rdata object that can be loaded directly. 
+
+**Analysis_OP_draft.Rmd** This R Markdown file was created to produce text and
 simulation output to be pasted into the draft Operational Plan.
 
-### /R
+## /OP_2025
 
+Files in this folder pertain directly to the Operational Plan outlining methods 
+for the 2025 iteration of this study.
+
+### /OP_2025/R
 * **entry_model.R** This script simulates a sequence of survival and detection
 probability vectors according to anticipated values, simulates detection histories 
 from each set of probabilities, and then runs the most current Hidden Markov model 
@@ -94,7 +144,10 @@ the entrance of tagged individuals at multiple locations relative to listening
 arrays, as well as incorporating handling survival (1-handling mortality) as 
 an estimable parameter.
 
-#### /R/obsolete 
+**This is the script that was used to estimate inferential precision as reported
+in the 2025 Operational Plan.**
+
+#### /OP_2025/R/obsolete 
 
 This folder contains a record of work under a previous state of the fieldwork 
 design, and does not reflect
@@ -107,7 +160,7 @@ using the simulated data as input to estimate parameters.  The inferential preci
 of each model is then evaluated by comparing the sequences of probability vectors
 to the values estimated by the candidate models.
 
-#### /R/experimenation 
+#### /OP_2025/R/experimenation 
 
 This folder contains a record of early, experimental work, and does not reflect
 the current state of the project.
@@ -125,8 +178,19 @@ this script was then repurposed for an early comparison between three candidate
 models, by means of meta-simulation.  
 
 
-### /data
+### /OP_2025/data
 
 This folder contains a sequence of .Rdata files representing specific simulations,
 that may be read as needed.  One is read in **Analysis_OP_draft.Rmd** in order to
 produce a table of anticpated inferential precision for each parameter of interest.
+
+### /OP_2025/testing
+
+This folder contains a few raw receiver files for initial testing.
+
+
+
+## /OP_2026
+
+This folder was created for files associated with the Operational Plan describing
+2026-2027 research efforts, which is currently empty.
