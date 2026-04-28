@@ -1,10 +1,65 @@
+#### FULL RECEIVER PROCESSING SCRIPT ##########################################
+# 
+# Rivers and nearshore environments are noisy places.  Raw acoustic receiver
+# data is therefore noisy as well, since enough ambient noise can and will
+# mimic the signals produced by acoustic telemetry tags.  Testing a set of 
+# receiver files spanning much of the 2025 pilot season indicated that less than
+# 1% of the data entries were produced by actual fish.
+# 
+# The purpose of this script is ultimately to read the raw receiver files, 
+# apply the appropriate filtration steps to filter out non-data, and write 
+# the filtered data to files in a specified output directory.  It is intentionally
+# written with the flexibility for the user to test and fine-tune filtration 
+# parameters and filtration step order (see below).
+# 
+# This script is hopefully a compilation of code authored by Dakota Rygh, 
+# Danielle Tryon, and Matt Tyers.
+# 
+# This script consists of the following subsections:
+#
+# 1. Loading libraries, defining input and output directories, and loading
+#    receiver and fish metadata.
+#
+# 2. Defining a set of functions for reading and processing data, to be called
+#    during the processing sequence.  The following filters have been developed, 
+#    and will likely be employed in this order:
+#    - Prefilter: Allow entries for which some minimum number of entries (default 
+#      of 2) exist for each tag number.
+#    - Tag Code filter: Allow entries for which tag number exists in the library 
+#      of tags that have been deployed.
+#    - Interval filter: Allow entries for which the time interval between 
+#      entries of a given tag is consistent with the beep rate (default of 
+#      2.5-3.5 seconds).
+#    - Event filter: Allow entries for which at least some number of entries 
+#      (default of 3) have been recorded for a given tag within some amount of 
+#      time (default of 30 seconds).
+#    - Multipath filter: Exclude entries that represent a reflected signal, that 
+#      is, within a threshold value (default of 0.3 seconds) of another entry.
+#
+# 3. Defining and running a Shiny app to allow the user to interactively test
+#    the filtration parameters and processing order
+#
+# 4. A non-interactive loop to batch-process all files.  This loop can be set
+#    to run without actually writing output files, which is recommended as a 
+#    final test before creating output files.
+
+
+
+#### 1. Loading libraries, defining paths, loading metadata ######################
+
 # ── Load libraries ──
 library(tidyverse)
 library(lubridate)
 library(data.table)
 library(vroom)
 
+
 # ── Define file paths ──
+
+### NOTE: This will be much more robust if configured with relative file paths
+### rather than absolute!!  This will require coordination between authors.
+
+
 # input_dir  <- "/Users/dakotarygh/Desktop/JSATS Kenai Chinook Smolt Project/Code and Data/Marine Data/Raw Data"
 # output_dir <- "/Users/dakotarygh/Desktop/JSATS Kenai Chinook Smolt Project/Code and Data/Marine Data/Cleaned Data"
 # unfiltered_clean_dir <- file.path(output_dir, "Unfiltered Clean Files")
@@ -58,6 +113,8 @@ StationaryMetadata <- readxl::read_xlsx(stationary_metadata_dir,
 
 
 
+
+#### 2. Defining functions to read and process data, to be called later ################
 
 # ── Read and clean receiver-reset-enabled CSV ──
 read_clean_vroom <- function(file_path) {
@@ -198,6 +255,12 @@ apply_tagcode_filter <- function(df, tagcodes_to_keep=tagcodes_to_keep, message=
   df_out
 }
 
+
+
+#### This was the original filter wrapper function, which was replaced with a
+#### slightly more flexible wrapper function allowing easier changes to 
+#### processing order and filter parameters
+
 # # ── Apply all filtering steps ──
 # apply_all_filters <- function(df) {
 #   after_tagcode <- df %>%
@@ -271,25 +334,33 @@ filter_tags_with_consistent_3s_intervals <- function(df, period=3, delta=0.5, me
   df_out
 }
 
-# ── Filter for at least 3 detections in 30 seconds ──
-filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30, message=FALSE) {
-  df_out <- df %>%
-    arrange(SiteName, TagCode, DateTime) %>%
-    group_by(SiteName, TagCode) %>%
-    mutate(
-      DetectionCount = map_int(seq_along(DateTime), function(i) {
-        sum(abs(as.numeric(difftime(DateTime[i], DateTime, units = "secs"))) <= t_sec)
-      })
-    ) %>%
-    ungroup() %>%
-    filter(DetectionCount >= n_events) %>%
-    select(-DetectionCount)
-  
-  if(message) {
-    print_message(df_out, "*️⃣ After event filter")
-  }
-  df_out
-}
+
+
+### This was the original event filter, which worked but was slow to process
+### large files
+
+# # ── Filter for at least 3 detections in 30 seconds ──
+# filter_tags_with_3_in_30s <- function(df, n_events=3, t_sec=30, message=FALSE) {
+#   df_out <- df %>%
+#     arrange(SiteName, TagCode, DateTime) %>%
+#     group_by(SiteName, TagCode) %>%
+#     mutate(
+#       DetectionCount = map_int(seq_along(DateTime), function(i) {
+#         sum(abs(as.numeric(difftime(DateTime[i], DateTime, units = "secs"))) <= t_sec)
+#       })
+#     ) %>%
+#     ungroup() %>%
+#     filter(DetectionCount >= n_events) %>%
+#     select(-DetectionCount)
+#   
+#   if(message) {
+#     print_message(df_out, "*️⃣ After event filter")
+#   }
+#   df_out
+# }
+
+
+
 
 # ── Filter for at least 3 detections in 30 seconds (much faster) ──
 filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30, message=FALSE) {
@@ -373,7 +444,8 @@ filter_tags_with_3_in_30s_v2 <- function(df, n_events=3, t_sec=30, message=FALSE
 
 
 
-######## interactive Shiny app to investigate processing flow
+##### 3. An interactive Shiny app to investigate processing flow ###############
+
 library(shiny)
 
 server <- shinyServer(function(input, output) {
@@ -498,7 +570,7 @@ shinyApp(ui = ui, server = server)
 
 
 
-# ──----------- Main processing loop -----------──
+#### 4. Main processing loop!! ##########################################
 
 ### --- LOOP CONTROLS --- ###
 
@@ -597,6 +669,8 @@ for (file_path in csv_files) {
     message("✔ Saved: ", filtered_out)
   }
 }
+
+# investigating summary numbers from processing
 the_tbl
 sum(the_tbl$rows_filtered) / sum(the_tbl$rows_init)  # global acceptance rate
 mean(the_tbl$rows_filtered / the_tbl$rows_init)  # mean acceptance rate across files
@@ -604,6 +678,7 @@ mean(the_tbl$rows_filtered / the_tbl$rows_init)  # mean acceptance rate across f
 
 
 
+### This was the original processing loop, which was revised for more flexibility
 
 # # ── Main processing loop ──
 # csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
@@ -674,6 +749,10 @@ mean(the_tbl$rows_filtered / the_tbl$rows_init)  # mean acceptance rate across f
 
 
 
+
+
+######## Investigating how often site metadata could be retrieved ##############
+
 # # was SiteName something weird?
 # the_tbl$SiteName <- sapply(all_filtered, \(x) x$SiteName[1])
 # the_tbl
@@ -698,6 +777,10 @@ StationaryMetadata$ArraySiteName_date[!(StationaryMetadata$ArraySiteName_date %i
   sort
 
 
+
+
+
+###### COMBINING ALL FILTERED DATA INTO A SINGLE FILE ############################
 
 # smashing all data together into one data.frame
 all_filtered_df <- do.call(rbind, all_filtered)
