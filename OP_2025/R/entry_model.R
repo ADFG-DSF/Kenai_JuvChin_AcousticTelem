@@ -20,15 +20,15 @@
 
 
 # metasimulation controls
-nsim <- 10000   # 10k sim at 4k iter in 12 hr on desktop
+nsim <- 10*1000   # 10k sim at 4k iter in **12 hr** on desktop
 
-run_model <- FALSE#TRUE     # if TRUE, run the full simulation
+run_model <- TRUE     # if TRUE, run the full simulation
                       # if FALSE, load the last saved results for plotting
 
 plot_indiv_run <- FALSE  # if TRUE, produce model diagnostic plots
                          # if FALSE, suppress these
 
-save_results <- TRUE  # if TRUE, automatically save simulation results
+save_results <- FALSE #TRUE  # if TRUE, automatically save simulation results
                       # if FALSE, suppress this
 
 probabilities_fixed <- FALSE    # if TRUE, keep all probabilities to fixed values 
@@ -85,7 +85,7 @@ sd_phandlings <- rep(NA, nsim)
 
 if(run_model) {
   t_overall_start <- Sys.time()
-  for(isim in 6176:nsim) {
+  for(isim in 1:nsim) {
     
     if(!probabilities_fixed) {
       psurvival <- rbeta(nstations, 
@@ -322,3 +322,15 @@ plot(rp_pdetections, main="Abs accuracy - detection probability")
 plot(rp_psurvivals, main="Abs accuracy - survival probability")
 plot(rp_overall_survivals, main="Abs accuracy - cumulative survival probability")
 plot(rp_phandlings, main="Abs accuracy - handling survival")
+
+
+# reproducing the table reported in the Operational Plan
+out_tbl <- data.frame(Array=c("-",seq(nstations)),
+                      `Detection`=c("-",round(100*rp_pdetections,1)),
+                      `Natural Survival`=c("-",round(100*rp_psurvivals,1)),
+                      `Cumulative Nat Survival`=c("-",round(100*rp_overall_survivals,1)),
+                      `Handling Mortality`=c(round(100*(rp_phandlings),1), 
+                                             rep("-", ncol(psurvivals))))
+
+## NOTE: all values of relative precision (accuracy) are given in Percentages!!
+out_tbl
